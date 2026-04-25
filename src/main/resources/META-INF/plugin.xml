@@ -1,0 +1,32 @@
+<idea-plugin>
+    <id>com.codeteam.bruno</id>
+    <name>Bruno</name>
+
+    <vendor email="bruno2rdg@gmail.com" url="https://www.codeteam.com">Code Team</vendor>
+
+    <description><![CDATA[
+        Bruno Generator helps Spring Boot developers quickly create a Bruno collection from existing controllers.<br><br>
+        The plugin scans Spring MVC endpoints, detects HTTP methods, routes, and request body parameters, and generates a ready-to-use Bruno collection with organized folders, request files, and example payloads.<br><br>
+        It also creates collection-level variables to make it easier to point requests to local or remote environments, reducing repetitive manual work when documenting and testing REST APIs.
+        ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.java</depends>
+
+    <resource-bundle>messages.MyMessageBundle</resource-bundle>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="Bruno Generator" displayType="BALLOON" isLogByDefault="true"/>
+    </extensions>
+
+    <actions>
+        <action id="GenerateBrunoCollectionAction"
+                class="com.codeteam.GenerateBrunoCollectionAction"
+                text="Generate Bruno Collection"
+                description="Generate Bruno files from Spring controllers"
+                icon="/META-INF/pluginIcon.png">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+    </actions>
+
+</idea-plugin>
