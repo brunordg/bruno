@@ -7,25 +7,26 @@ import com.intellij.openapi.project.Project
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.Align
 import com.intellij.ui.dsl.builder.panel
+import com.intellij.util.ui.table.TableModelEditor
 import javax.swing.JComponent
 
 class BrunoGeneratorConfigurable(private val project: Project) : Configurable {
 
     private val settings = BrunoGeneratorSettings.getInstance(project)
-    private var table: EnvironmentsTable? = null
+    private var tableEditor: TableModelEditor<BrunoEnvironment>? = null
     private var defaultEnvironmentField: JBTextField? = null
 
     override fun getDisplayName(): String = MyMessageBundle.message("settings.displayName")
 
     override fun createComponent(): JComponent {
-        val newTable = EnvironmentsTable()
-        table = newTable
+        val editor = createEnvironmentsTableEditor()
+        tableEditor = editor
         val newField = JBTextField()
         defaultEnvironmentField = newField
 
         val panel = panel {
             row {
-                cell(newTable.component).align(Align.FILL)
+                cell(editor.createComponent()).align(Align.FILL)
             }.resizableRow()
             row("Default environment name:") {
                 cell(newField).align(Align.FILL)
@@ -36,17 +37,15 @@ class BrunoGeneratorConfigurable(private val project: Project) : Configurable {
     }
 
     override fun isModified(): Boolean {
-        val currentTable = table ?: return false
         val currentField = defaultEnvironmentField ?: return false
-        return currentTable.currentValues() != settings.state.environments ||
+        return tableEditor?.isModified() == true ||
             currentField.text.trim() != settings.state.defaultEnvironmentName
     }
 
     override fun apply() {
-        val currentTable = table ?: return
+        val editor = tableEditor ?: return
         val currentField = defaultEnvironmentField ?: return
-        currentTable.stopEditing()
-        val values = currentTable.currentValues()
+        val values = editor.apply()
             .filter { it.name.isNotBlank() && it.baseUrl.isNotBlank() }
         if (values.isEmpty()) {
             throw ConfigurationException("Add at least one environment with a name and base URL.")
@@ -64,7 +63,7 @@ class BrunoGeneratorConfigurable(private val project: Project) : Configurable {
     }
 
     override fun reset() {
-        table?.setValues(settings.state.environments.map { it.copy() })
+        tableEditor?.reset(settings.state.environments.map { it.copy() })
         defaultEnvironmentField?.text = settings.state.defaultEnvironmentName
     }
 }
