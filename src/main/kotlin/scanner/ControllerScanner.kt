@@ -5,7 +5,7 @@ import com.codeteam.model.ParamKind
 import com.codeteam.model.RequestBodyField
 import com.codeteam.model.RequestParameter
 import com.codeteam.model.ValidationConstraints
-import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.psi.JavaPsiFacade
 import com.intellij.psi.PsiAnnotation
@@ -24,12 +24,12 @@ class ControllerScanner {
     private val verbsWithBody = setOf("POST", "PUT", "PATCH")
 
     fun scan(project: Project): List<Endpoint> {
-        return ReadAction.compute<List<Endpoint>, RuntimeException> {
+        return ApplicationManager.getApplication().runReadAction<List<Endpoint>> {
             val projectScope = GlobalSearchScope.projectScope(project)
             val libraryScope = GlobalSearchScope.allScope(project)
             val restControllerClass = JavaPsiFacade.getInstance(project)
                 .findClass(REST_CONTROLLER_FQN, libraryScope)
-                ?: return@compute emptyList()
+                ?: return@runReadAction emptyList()
 
             AnnotatedElementsSearch.searchPsiClasses(restControllerClass, projectScope)
                 .findAll()
