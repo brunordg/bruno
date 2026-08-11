@@ -2,7 +2,10 @@ package com.codeteam.writer
 
 import com.codeteam.model.Endpoint
 import com.codeteam.model.RequestBodyField
-import fleet.codepoints.isDoubleWidthCharacter
+import com.codeteam.model.RequestParameter
+import com.codeteam.settings.BrunoEnvironment
+import com.codeteam.settings.BrunoGeneratorState
+import com.codeteam.settings.resolvedDefaultBaseUrl
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
@@ -10,17 +13,19 @@ import kotlin.io.path.writeText
 import kotlin.use
 
 class BrunoWriter {
-    private val defaultBaseUrl = "http://localhost:8080"
 
-    fun writeCollection(projectRoot: Path, endpoints: List<Endpoint>) {
+    fun writeCollection(projectRoot: Path, endpoints: List<Endpoint>, settings: BrunoGeneratorState) {
         val brunoRoot = projectRoot.resolve("bruno")
         val requestsDir = brunoRoot.resolve("requests")
+        val environmentsDir = brunoRoot.resolve("environments")
 
         brunoRoot.createDirectories()
         requestsDir.createDirectories()
 
         brunoRoot.resolve("bruno.json").writeText(brunoJson(projectRoot))
-        brunoRoot.resolve("collection.bru").writeText(collectionVariables())
+        brunoRoot.resolve("collection.bru").writeText(collectionVariables(settings.resolvedDefaultBaseUrl()))
+
+        writeEnvironments(environmentsDir, settings.environments)
 
         endpoints.forEachIndexed { index, endpoint ->
             val folderName = endpoint.path.trim('/').split('/').firstOrNull().orEmpty().ifBlank { "root" }
@@ -30,7 +35,8 @@ class BrunoWriter {
             endpointDir.resolve(fileName).writeText(requestContent(endpoint, index + 1))
         }
 
-        pruneStaleBruFiles(requestsDir, endpoints)
+        pruneStaleRequestFiles(requestsDir, endpoints)
+        pruneStaleEnvironmentFiles(environmentsDir, settings.environments)
     }
 
     private fun brunoJson(projectRoot: Path): String {
@@ -44,7 +50,7 @@ class BrunoWriter {
         """.trimIndent() + "\n"
     }
 
-    private fun collectionVariables(): String {
+    private fun collectionVariables(defaultBaseUrl: String): String {
         return """
             vars:pre-request {
               baseUrl: $defaultBaseUrl
@@ -52,9 +58,21 @@ class BrunoWriter {
         """.trimIndent() + "\n"
     }
 
+    private fun writeEnvironments(environmentsDir: Path, environments: List<BrunoEnvironment>) {
+        environmentsDir.createDirectories()
+        environments.forEach { environment ->
+            environmentsDir.resolve("${slug(environment.name)}.bru").writeText(
+                "vars {\n  baseUrl: ${environment.baseUrl}\n}\n"
+            )
+        }
+    }
+
     private fun requestContent(endpoint: Endpoint, seq: Int): String {
         val verbLower = endpoint.httpMethod.lowercase()
         val name = "${endpoint.httpMethod} ${endpoint.path}"
+        val urlPath = toBrunoUrlPath(endpoint.path)
+        val queryString = buildQueryString(endpoint.queryParams)
+
         val content = buildString {
             appendLine("meta {")
             appendLine("  name: $name")
@@ -64,18 +82,36 @@ class BrunoWriter {
             appendLine()
 
             appendLine("$verbLower {")
-            appendLine("  url: {{baseUrl}}${endpoint.path}")
+            appendLine("  url: {{baseUrl}}$urlPath$queryString")
             if (endpoint.hasRequestBody) {
                 appendLine("  body: json")
             }
             appendLine("  auth: none")
             appendLine("}")
-            appendLine()
 
+            if (endpoint.pathVariables.isNotEmpty()) {
+                appendLine()
+                appendLine("params:path {")
+                endpoint.pathVariables.forEach { appendLine("  ${paramLine(it)}") }
+                appendLine("}")
+            }
+
+            if (endpoint.queryParams.isNotEmpty()) {
+                appendLine()
+                appendLine("params:query {")
+                endpoint.queryParams.forEach { appendLine("  ${paramLine(it)}") }
+                appendLine("}")
+            }
+
+            appendLine()
             appendLine("headers {")
             appendLine("  Accept: application/json")
             if (endpoint.hasRequestBody) {
                 appendLine("  Content-Type: application/json")
+            }
+            endpoint.headerParams.forEach { appendLine("  ${paramLine(it)}") }
+            if (endpoint.cookieParams.isNotEmpty()) {
+                appendLine("  ${cookieHeaderLine(endpoint.cookieParams)}")
             }
             appendLine("}")
 
@@ -85,9 +121,39 @@ class BrunoWriter {
                 appendLine(jsonObject(endpoint))
                 appendLine("}")
             }
+
+            val patternNotes = endpoint.requestBodyFields.mapNotNull { field ->
+                field.constraints.pattern?.let { "field '${field.name}' must match pattern: $it" }
+            }
+            if (patternNotes.isNotEmpty()) {
+                appendLine()
+                appendLine("docs {")
+                patternNotes.forEach { appendLine("  $it") }
+                appendLine("}")
+            }
         }
         return content + "\n"
     }
+
+    private fun paramLine(param: RequestParameter): String {
+        val key = if (param.required) param.name else "~${param.name}"
+        val value = param.defaultValue ?: fakeValue(param.name, param.type)
+        return "$key: $value"
+    }
+
+    private fun cookieHeaderLine(cookies: List<RequestParameter>): String {
+        val pairs = cookies.joinToString("; ") { "${it.name}=${it.defaultValue ?: fakeValue(it.name, it.type)}" }
+        return "Cookie: $pairs"
+    }
+
+    private fun buildQueryString(queryParams: List<RequestParameter>): String {
+        val enabled = queryParams.filter { it.required }
+        if (enabled.isEmpty()) return ""
+        return "?" + enabled.joinToString("&") { "${it.name}=${it.defaultValue ?: fakeValue(it.name, it.type)}" }
+    }
+
+    internal fun toBrunoUrlPath(path: String): String =
+        path.replace(Regex("""\{(\w+)(:[^}]*)?}"""), ":$1")
 
     private fun jsonObject(endpoint: Endpoint): String {
         val fields = endpoint.requestBodyFields.filter { it.name.isNotBlank() }
@@ -96,11 +162,19 @@ class BrunoWriter {
             return "  {\n    \"id\": \"$fallback\"\n  }"
         }
 
+        val dynamic = usesDynamicFakes(endpoint.httpMethod)
         val entries = fields.joinToString(",\n") { field ->
-            val value = if (usesDynamicFakes(endpoint.httpMethod)) dynamicFakeForField(field) else "{{${field.name}}}"
-            "    \"${field.name}\": \"$value\""
+            val value = if (dynamic) dynamicFakeForField(field) else "{{${field.name}}}"
+            val valueText = if (quoteJsonValue(field)) "\"$value\"" else value
+            "    \"${field.name}\": $valueText"
         }
         return "  {\n$entries\n  }"
+    }
+
+    private fun quoteJsonValue(field: RequestBodyField): Boolean {
+        if (field.isEnum) return true
+        val type = field.type.lowercase()
+        return !(isNumericTypeName(type) || type == "boolean" || type == "bool")
     }
 
     private fun usesDynamicFakes(httpMethod: String): Boolean {
@@ -108,25 +182,49 @@ class BrunoWriter {
     }
 
     private fun dynamicFakeForField(field: RequestBodyField): String {
-        val normalized = field.name.lowercase()
+        if (field.isEnum && field.enumConstants.isNotEmpty()) {
+            return field.enumConstants.first()
+        }
+        val constraints = field.constraints
         val type = field.type.lowercase()
-        val isStringType = type.contains("string")
-        val isDate = type.contains("date") ||
-                type.contains("time") ||
-                type.contains("timestamp") ||
-                type.contains("localdatetime") ||
-                type.contains("offsetdatetime")
-        val isNumericType = type.contains("int") ||
-            type.contains("long") ||
-            type.contains("double") ||
-            type.contains("float") ||
-            type.contains("bigdecimal") ||
-            type.contains("number")
+        if (constraints.email) {
+            return "{{\$randomEmail}}"
+        }
+        if (isNumericTypeName(type) && (constraints.min != null || constraints.max != null)) {
+            val literal = boundedNumericLiteral(constraints.min, constraints.max)
+            return if (isDoubleTypeName(type)) "$literal.0" else literal.toString()
+        }
+        return fakeValue(field.name, field.type)
+    }
 
-        val isDouble = type.contains("bigdecimal") ||
-                type.contains("double") ||
-                type.contains("float")
+    private fun boundedNumericLiteral(min: Long?, max: Long?): Long = when {
+        min != null && max != null -> (min + max) / 2
+        min != null -> min
+        max != null -> max
+        else -> 0L
+    }
 
+    private fun isNumericTypeName(type: String): Boolean = type.lowercase().let {
+        it.contains("int") || it.contains("long") || it.contains("double") ||
+            it.contains("float") || it.contains("bigdecimal") || it.contains("number") ||
+            it.contains("short") || it.contains("byte")
+    }
+
+    private fun isDoubleTypeName(type: String): Boolean = type.lowercase().let {
+        it.contains("bigdecimal") || it.contains("double") || it.contains("float")
+    }
+
+    internal fun fakeValue(name: String, type: String): String {
+        val normalized = name.lowercase()
+        val lowerType = type.lowercase()
+        val isStringType = lowerType.contains("string")
+        val isDate = lowerType.contains("date") ||
+            lowerType.contains("time") ||
+            lowerType.contains("timestamp") ||
+            lowerType.contains("localdatetime") ||
+            lowerType.contains("offsetdatetime")
+        val isNumericType = isNumericTypeName(lowerType)
+        val isDouble = isDoubleTypeName(lowerType)
 
         return when {
             normalized == "id" || normalized.endsWith("id") -> {
@@ -151,11 +249,11 @@ class BrunoWriter {
             isDate -> "{{\$isoTimestamp}}"
             isStringType -> "{{\$randomLoremWord}}"
             isNumericType -> "{{\$randomInt}}"
-            else -> "{{${field.name}}}"
+            else -> "{{$name}}"
         }
     }
 
-    private fun slug(raw: String): String {
+    internal fun slug(raw: String): String {
         return raw
             .replace(Regex("([a-z])([A-Z]+)"), "$1-$2")
             .lowercase()
@@ -164,7 +262,7 @@ class BrunoWriter {
             .ifBlank { "request" }
     }
 
-    private fun pruneStaleBruFiles(requestsDir: Path, endpoints: List<Endpoint>) {
+    private fun pruneStaleRequestFiles(requestsDir: Path, endpoints: List<Endpoint>) {
         if (!Files.exists(requestsDir)) return
 
         val expected = endpoints.mapIndexed { index, endpoint ->
@@ -178,13 +276,25 @@ class BrunoWriter {
             stream.filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(".bru") }
                 .forEach { file ->
                     val normalized = file.normalize().toString()
-                    if (normalized !in expected && !file.toString().contains("environments")) {
+                    if (normalized !in expected) {
                         Files.deleteIfExists(file)
                     }
                 }
         }
     }
 
+    private fun pruneStaleEnvironmentFiles(environmentsDir: Path, environments: List<BrunoEnvironment>) {
+        if (!Files.exists(environmentsDir)) return
 
+        val expected = environments.map { "${slug(it.name)}.bru" }.toSet()
 
+        Files.walk(environmentsDir).use { stream ->
+            stream.filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(".bru") }
+                .forEach { file ->
+                    if (file.fileName.toString() !in expected) {
+                        Files.deleteIfExists(file)
+                    }
+                }
+        }
+    }
 }

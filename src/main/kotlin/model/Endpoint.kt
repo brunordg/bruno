@@ -1,8 +1,31 @@
 package com.codeteam.model
 
+enum class ParamKind { QUERY, PATH, HEADER, COOKIE }
+
+data class RequestParameter(
+    val name: String,
+    val kind: ParamKind,
+    val type: String,
+    val required: Boolean,
+    val defaultValue: String? = null
+)
+
+data class ValidationConstraints(
+    val required: Boolean = false,
+    val minSize: Int? = null,
+    val maxSize: Int? = null,
+    val min: Long? = null,
+    val max: Long? = null,
+    val email: Boolean = false,
+    val pattern: String? = null
+)
+
 data class RequestBodyField(
     val name: String,
-    val type: String
+    val type: String,
+    val isEnum: Boolean = false,
+    val enumConstants: List<String> = emptyList(),
+    val constraints: ValidationConstraints = ValidationConstraints()
 )
 
 data class Endpoint(
@@ -10,7 +33,9 @@ data class Endpoint(
     val path: String,
     val handlerName: String,
     val hasRequestBody: Boolean,
-    val requestBodyFields: List<RequestBodyField> = emptyList()
-) {
-
-}
+    val requestBodyFields: List<RequestBodyField> = emptyList(),
+    val pathVariables: List<RequestParameter> = emptyList(),
+    val queryParams: List<RequestParameter> = emptyList(),
+    val headerParams: List<RequestParameter> = emptyList(),
+    val cookieParams: List<RequestParameter> = emptyList()
+)

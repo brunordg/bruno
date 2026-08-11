@@ -1,6 +1,7 @@
 package com.codeteam
 
 import com.codeteam.scanner.ControllerScanner
+import com.codeteam.settings.BrunoGeneratorSettings
 import com.codeteam.writer.BrunoWriter
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
@@ -29,13 +30,15 @@ class GenerateBrunoCollectionAction : AnAction(), DumbAware {
         val project = e.project ?: return
         val basePath = project.basePath ?: return
 
-        try {
-            ApplicationManager.getApplication().executeOnPooledThread {
+        ApplicationManager.getApplication().executeOnPooledThread {
+            runCatching {
+                val settings = BrunoGeneratorSettings.getInstance(project).state
                 val endpoints = scanner.scan(project)
-                writer.writeCollection(Path.of(basePath), endpoints)
+                writer.writeCollection(Path.of(basePath), endpoints, settings)
                 LocalFileSystem.getInstance()
                     .refreshAndFindFileByNioFile(Path.of(basePath).resolve("bruno"))
-
+                endpoints
+            }.onSuccess { endpoints ->
                 NotificationGroupManager.getInstance()
                     .getNotificationGroup("Bruno Generator")
                     .createNotification(
@@ -44,16 +47,16 @@ class GenerateBrunoCollectionAction : AnAction(), DumbAware {
                         NotificationType.INFORMATION
                     )
                     .notify(project)
+            }.onFailure { t ->
+                NotificationGroupManager.getInstance()
+                    .getNotificationGroup("Bruno Generator")
+                    .createNotification(
+                        "Failed to generate Bruno collection",
+                        t.message ?: "Unknown error",
+                        NotificationType.ERROR
+                    )
+                    .notify(project)
             }
-        } catch (e: Exception) {
-            NotificationGroupManager.getInstance()
-                .getNotificationGroup("Bruno Generator")
-                .createNotification(
-                    "Failed to generate Bruno collection",
-                    e.message ?: "Unknown error",
-                    NotificationType.ERROR
-                )
-                .notify(project)
         }
     }
 }

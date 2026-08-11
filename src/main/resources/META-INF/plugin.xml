@@ -17,6 +17,11 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <notificationGroup id="Bruno Generator" displayType="BALLOON" isLogByDefault="true"/>
+        <projectConfigurable
+                parentId="tools"
+                instance="com.codeteam.settings.BrunoGeneratorConfigurable"
+                id="com.codeteam.bruno.settings"
+                displayName="Bruno Generator"/>
     </extensions>
 
     <actions>
