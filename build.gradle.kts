@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.codeteam"
-version = "1.1.0"
+version = "1.1.1"
 
 // Build with JDK 26 (the only JDK installed on this machine), but keep the compiled
 // bytecode at Java 21: IntelliJ Platform 2025.3.1's bundled JetBrains Runtime is JDK 21,
@@ -65,6 +65,11 @@ intellijPlatform {
         }
 
         changeNotes = """
+            <ul>
+                <li>Fix plugin logo not displaying in Marketplace search results (switched pluginIcon.png to the required pluginIcon.svg format)</li>
+                <li>Replace a deprecated ReadAction.compute call with a non-deprecated equivalent</li>
+            </ul>
+            <p>1.1.0:</p>
             <ul>
                 <li>Extract @RequestParam, @PathVariable, @RequestHeader and @CookieValue into generated requests</li>
                 <li>Use Bean Validation annotations (@NotNull, @Size, @Email, @Min/@Max, @Pattern) and enum fields to generate more realistic example payloads</li>
