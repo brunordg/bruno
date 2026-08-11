@@ -29,7 +29,7 @@
                 class="com.codeteam.GenerateBrunoCollectionAction"
                 text="Generate Bruno Collection"
                 description="Generate Bruno files from Spring controllers"
-                icon="/META-INF/pluginIcon.png">
+                icon="/icons/brunoAction.png">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
     </actions>
