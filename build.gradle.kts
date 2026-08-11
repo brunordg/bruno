@@ -9,7 +9,7 @@ version = "1.0.2-SNAPSHOT"
 
 // Set the JVM language level used to build the project.
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(26)
 }
 
 repositories {
