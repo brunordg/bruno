@@ -34,4 +34,14 @@ class BrunoGeneratorStateTest {
         val state = BrunoGeneratorState().apply { environments = mutableListOf() }
         assertEquals("http://localhost:8080", state.resolvedDefaultBaseUrl())
     }
+
+    @Test
+    fun `default state has a single dev environment and no output directory`() {
+        val state = BrunoGeneratorState()
+        assertEquals(1, state.environments.size)
+        assertEquals("dev", state.environments.single().name)
+        assertEquals("http://localhost:8080", state.environments.single().baseUrl)
+        assertEquals("dev", state.defaultEnvironmentName)
+        assertEquals("", state.outputDirectory)
+    }
 }

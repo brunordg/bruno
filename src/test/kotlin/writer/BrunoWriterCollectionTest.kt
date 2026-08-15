@@ -51,9 +51,8 @@ class BrunoWriterCollectionTest {
             cookieParams = listOf(RequestParameter(name = "session", kind = ParamKind.COOKIE, type = "String", required = false))
         )
 
-        writer.writeCollection(projectRoot, listOf(endpoint), settings)
+        val brunoRoot = writer.writeCollection(projectRoot, listOf(endpoint), settings)
 
-        val brunoRoot = projectRoot.resolve("bruno")
         assertTrue(Files.exists(brunoRoot.resolve("bruno.json")))
 
         val collectionText = Files.readString(brunoRoot.resolve("collection.bru"))
@@ -92,8 +91,7 @@ class BrunoWriterCollectionTest {
         val endpointA = Endpoint(httpMethod = "GET", path = "/api/a", handlerName = "a", hasRequestBody = false)
         val endpointB = Endpoint(httpMethod = "GET", path = "/api/b", handlerName = "b", hasRequestBody = false)
 
-        writer.writeCollection(projectRoot, listOf(endpointA, endpointB), settings)
-        val brunoRoot = projectRoot.resolve("bruno")
+        val brunoRoot = writer.writeCollection(projectRoot, listOf(endpointA, endpointB), settings)
         assertTrue(Files.exists(brunoRoot.resolve("requests/api/01-a.bru")))
         assertTrue(Files.exists(brunoRoot.resolve("requests/api/02-b.bru")))
         assertTrue(Files.exists(brunoRoot.resolve("environments/staging.bru")))
@@ -105,5 +103,28 @@ class BrunoWriterCollectionTest {
         assertFalse(Files.exists(brunoRoot.resolve("requests/api/02-b.bru")))
         assertFalse(Files.exists(brunoRoot.resolve("environments/staging.bru")))
         assertTrue(Files.exists(brunoRoot.resolve("environments/dev.bru")))
+    }
+
+    @Test
+    fun `writes the collection under a custom output directory while keeping the project name`() {
+        val projectRoot = Files.createTempDirectory("bruno-writer-project")
+        val outputRoot = Files.createTempDirectory("bruno-writer-custom-output")
+        val settings = BrunoGeneratorState().apply {
+            environments = mutableListOf(BrunoEnvironment("dev", "http://localhost:8080"))
+            defaultEnvironmentName = "dev"
+        }
+        val endpoint = Endpoint(httpMethod = "GET", path = "/api/a", handlerName = "a", hasRequestBody = false)
+
+        val brunoRoot = writer.writeCollection(projectRoot, listOf(endpoint), settings, outputRoot)
+
+        val projectName = projectRoot.fileName.toString()
+        assertFalse(Files.exists(projectRoot.resolve(projectName)))
+        assertTrue(Files.exists(outputRoot.resolve(projectName)))
+        assertTrue(brunoRoot.startsWith(outputRoot))
+        assertTrue(Files.exists(brunoRoot.resolve("bruno.json")))
+        assertTrue(Files.exists(brunoRoot.resolve("requests/api/01-a.bru")))
+        assertTrue(
+            Files.readString(brunoRoot.resolve("bruno.json")).contains(projectName)
+        )
     }
 }

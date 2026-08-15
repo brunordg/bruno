@@ -14,11 +14,10 @@ data class BrunoEnvironment(
 
 class BrunoGeneratorState {
     var environments: MutableList<BrunoEnvironment> = mutableListOf(
-        BrunoEnvironment("dev", "http://localhost:8080"),
-        BrunoEnvironment("staging", "https://staging.example.com"),
-        BrunoEnvironment("prod", "https://api.example.com")
+        BrunoEnvironment("dev", "http://localhost:8080")
     )
     var defaultEnvironmentName: String = "dev"
+    var outputDirectory: String = ""
 }
 
 fun BrunoGeneratorState.resolvedDefaultBaseUrl(): String =

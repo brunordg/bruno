@@ -34,16 +34,18 @@ class GenerateBrunoCollectionAction : AnAction(), DumbAware {
             runCatching {
                 val settings = BrunoGeneratorSettings.getInstance(project).state
                 val endpoints = scanner.scan(project)
-                writer.writeCollection(Path.of(basePath), endpoints, settings)
+                val projectRoot = Path.of(basePath)
+                val outputRoot = resolveOutputRoot(projectRoot, settings.outputDirectory)
+                val brunoRoot = writer.writeCollection(projectRoot, endpoints, settings, outputRoot)
                 LocalFileSystem.getInstance()
-                    .refreshAndFindFileByNioFile(Path.of(basePath).resolve("bruno"))
-                endpoints
-            }.onSuccess { endpoints ->
+                    .refreshAndFindFileByNioFile(brunoRoot)
+                endpoints to brunoRoot
+            }.onSuccess { (endpoints, brunoRoot) ->
                 NotificationGroupManager.getInstance()
                     .getNotificationGroup("Bruno Generator")
                     .createNotification(
                         "Bruno collection generated",
-                        "Generated ${endpoints.size} requests in bruno/",
+                        "Generated ${endpoints.size} requests in ${brunoRoot.fileName}/",
                         NotificationType.INFORMATION
                     )
                     .notify(project)
@@ -58,5 +60,12 @@ class GenerateBrunoCollectionAction : AnAction(), DumbAware {
                     .notify(project)
             }
         }
+    }
+
+    private fun resolveOutputRoot(projectRoot: Path, outputDirectory: String): Path {
+        val trimmed = outputDirectory.trim()
+        if (trimmed.isBlank()) return projectRoot
+        val configured = Path.of(trimmed)
+        return if (configured.isAbsolute) configured else projectRoot.resolve(configured)
     }
 }

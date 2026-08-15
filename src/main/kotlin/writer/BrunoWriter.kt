@@ -14,15 +14,21 @@ import kotlin.use
 
 class BrunoWriter {
 
-    fun writeCollection(projectRoot: Path, endpoints: List<Endpoint>, settings: BrunoGeneratorState) {
-        val brunoRoot = projectRoot.resolve("bruno")
+    fun writeCollection(
+        projectRoot: Path,
+        endpoints: List<Endpoint>,
+        settings: BrunoGeneratorState,
+        outputRoot: Path = projectRoot
+    ): Path {
+        val collectionName = collectionName(projectRoot)
+        val brunoRoot = outputRoot.resolve(collectionName)
         val requestsDir = brunoRoot.resolve("requests")
         val environmentsDir = brunoRoot.resolve("environments")
 
         brunoRoot.createDirectories()
         requestsDir.createDirectories()
 
-        brunoRoot.resolve("bruno.json").writeText(brunoJson(projectRoot))
+        brunoRoot.resolve("bruno.json").writeText(brunoJson(collectionName))
         brunoRoot.resolve("collection.bru").writeText(collectionVariables(settings.resolvedDefaultBaseUrl()))
 
         writeEnvironments(environmentsDir, settings.environments)
@@ -37,10 +43,14 @@ class BrunoWriter {
 
         pruneStaleRequestFiles(requestsDir, endpoints)
         pruneStaleEnvironmentFiles(environmentsDir, settings.environments)
+
+        return brunoRoot
     }
 
-    private fun brunoJson(projectRoot: Path): String {
-        val collectionName = projectRoot.fileName?.toString().orEmpty().ifBlank { "collection" }
+    private fun collectionName(projectRoot: Path): String =
+        projectRoot.fileName?.toString().orEmpty().ifBlank { "collection" }
+
+    private fun brunoJson(collectionName: String): String {
         return """
             {
               "version": "1",
