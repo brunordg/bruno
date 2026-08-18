@@ -25,7 +25,18 @@ data class RequestBodyField(
     val type: String,
     val isEnum: Boolean = false,
     val enumConstants: List<String> = emptyList(),
-    val constraints: ValidationConstraints = ValidationConstraints()
+    val constraints: ValidationConstraints = ValidationConstraints(),
+    val isCollection: Boolean = false,
+    val nestedFields: List<RequestBodyField> = emptyList()
+)
+
+enum class BodyKind { NONE, JSON, MULTIPART }
+
+data class MultipartPart(
+    val name: String,
+    val isFile: Boolean,
+    val type: String,
+    val required: Boolean = true
 )
 
 data class Endpoint(
@@ -33,7 +44,9 @@ data class Endpoint(
     val path: String,
     val handlerName: String,
     val hasRequestBody: Boolean,
+    val bodyKind: BodyKind = BodyKind.NONE,
     val requestBodyFields: List<RequestBodyField> = emptyList(),
+    val multipartParts: List<MultipartPart> = emptyList(),
     val pathVariables: List<RequestParameter> = emptyList(),
     val queryParams: List<RequestParameter> = emptyList(),
     val headerParams: List<RequestParameter> = emptyList(),

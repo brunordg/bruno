@@ -48,6 +48,7 @@ dependencies {
     intellijPlatform {
         intellijIdea(providers.gradleProperty("platformVersion"))
         testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
+        testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Plugin.Java)
 
         // Add plugin dependencies for compilation here:
         bundledPlugin("com.intellij.java")

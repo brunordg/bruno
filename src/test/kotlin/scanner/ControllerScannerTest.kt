@@ -1,18 +1,34 @@
 package scanner
 
+import com.codeteam.model.BodyKind
 import com.codeteam.scanner.ControllerScanner
 import com.intellij.openapi.application.PathManager
+import com.intellij.openapi.projectRoots.impl.JavaAwareProjectJdkTableImpl
+import com.intellij.openapi.roots.ModuleRootModificationUtil
 import com.intellij.testFramework.PsiTestUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import jakarta.validation.constraints.NotNull
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.multipart.MultipartFile
 
 class ControllerScannerTest : BasePlatformTestCase() {
 
+    @Suppress("DEPRECATION")
     override fun setUp() {
         super.setUp()
+        // Scoped to just the java.base module (not a full SDK): the platform's
+        // internal JDK also exposes jdk.javadoc's bundled doclet resources, whose
+        // JS indexing crashes in this sandboxed test environment.
+        val jdkHome = JavaAwareProjectJdkTableImpl.getInstanceEx().internalJdk.homePath
+        ModuleRootModificationUtil.addModuleLibrary(
+            module,
+            "java.base",
+            listOf("jrt://$jdkHome!/java.base"),
+            emptyList()
+        )
         PsiTestUtil.addLibrary(module, PathManager.getJarPathForClass(RestController::class.java)!!)
         PsiTestUtil.addLibrary(module, PathManager.getJarPathForClass(NotNull::class.java)!!)
+        PsiTestUtil.addLibrary(module, PathManager.getJarPathForClass(MultipartFile::class.java)!!)
     }
 
     fun `test scans a rest controller for params, path variables, headers, cookies and a validated body`() {
@@ -106,5 +122,140 @@ class ControllerScannerTest : BasePlatformTestCase() {
         val statusField = postEndpoint.requestBodyFields.first { it.name == "status" }
         assertTrue(statusField.isEnum)
         assertEquals(listOf("ACTIVE", "INACTIVE"), statusField.enumConstants)
+    }
+
+    fun `test extracts nested object fields and lists of objects and scalars from a request body`() {
+        myFixture.addFileToProject(
+            "OrderController.java",
+            """
+            import org.springframework.web.bind.annotation.*;
+
+            @RestController
+            @RequestMapping("/api/orders")
+            public class OrderController {
+                @PostMapping
+                public Object create(@RequestBody CreateOrderRequest body) {
+                    return null;
+                }
+            }
+            """.trimIndent()
+        )
+        myFixture.addFileToProject(
+            "CreateOrderRequest.java",
+            """
+            import java.util.List;
+
+            public class CreateOrderRequest {
+                public Address shippingAddress;
+                public List<OrderItem> items;
+                public List<String> tags;
+            }
+            """.trimIndent()
+        )
+        myFixture.addFileToProject(
+            "Address.java",
+            """
+            public class Address {
+                public String street;
+                public String city;
+            }
+            """.trimIndent()
+        )
+        myFixture.addFileToProject(
+            "OrderItem.java",
+            """
+            public class OrderItem {
+                public String sku;
+                public int qty;
+            }
+            """.trimIndent()
+        )
+
+        val endpoints = ControllerScanner().scan(project)
+        val postEndpoint = endpoints.first { it.httpMethod == "POST" }
+
+        val addressField = postEndpoint.requestBodyFields.first { it.name == "shippingAddress" }
+        assertFalse(addressField.isCollection)
+        assertEquals(setOf("street", "city"), addressField.nestedFields.map { it.name }.toSet())
+
+        val itemsField = postEndpoint.requestBodyFields.first { it.name == "items" }
+        assertTrue(itemsField.isCollection)
+        assertEquals(setOf("sku", "qty"), itemsField.nestedFields.map { it.name }.toSet())
+
+        val tagsField = postEndpoint.requestBodyFields.first { it.name == "tags" }
+        assertTrue(tagsField.isCollection)
+        assertTrue(tagsField.nestedFields.isEmpty())
+    }
+
+    fun `test stops recursing into a self-referencing request body field instead of overflowing`() {
+        myFixture.addFileToProject(
+            "NodeController.java",
+            """
+            import org.springframework.web.bind.annotation.*;
+
+            @RestController
+            @RequestMapping("/api/nodes")
+            public class NodeController {
+                @PostMapping
+                public Object create(@RequestBody Node body) {
+                    return null;
+                }
+            }
+            """.trimIndent()
+        )
+        myFixture.addFileToProject(
+            "Node.java",
+            """
+            public class Node {
+                public String label;
+                public Node parent;
+            }
+            """.trimIndent()
+        )
+
+        val endpoints = ControllerScanner().scan(project)
+        val postEndpoint = endpoints.first { it.httpMethod == "POST" }
+
+        val parentField = postEndpoint.requestBodyFields.first { it.name == "parent" }
+        assertFalse(parentField.nestedFields.isEmpty())
+
+        val grandparentField = parentField.nestedFields.first { it.name == "parent" }
+        assertTrue(grandparentField.nestedFields.isEmpty())
+    }
+
+    fun `test detects multipart request parts and file uploads`() {
+        myFixture.addFileToProject(
+            "UploadController.java",
+            """
+            import org.springframework.web.bind.annotation.*;
+            import org.springframework.web.multipart.MultipartFile;
+
+            @RestController
+            @RequestMapping("/api/uploads")
+            public class UploadController {
+                @PostMapping
+                public Object upload(
+                    @RequestPart("file") MultipartFile file,
+                    @RequestPart(value = "caption", required = false) String caption
+                ) {
+                    return null;
+                }
+            }
+            """.trimIndent()
+        )
+
+        val endpoints = ControllerScanner().scan(project)
+        val postEndpoint = endpoints.first { it.httpMethod == "POST" }
+
+        assertEquals(BodyKind.MULTIPART, postEndpoint.bodyKind)
+        assertEquals(2, postEndpoint.multipartParts.size)
+
+        val filePart = postEndpoint.multipartParts.first { it.name == "file" }
+        assertTrue(filePart.isFile)
+        assertTrue(filePart.required)
+
+        val captionPart = postEndpoint.multipartParts.first { it.name == "caption" }
+        assertFalse(captionPart.isFile)
+        assertFalse(captionPart.required)
     }
 }

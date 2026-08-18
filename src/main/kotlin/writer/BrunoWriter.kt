@@ -1,5 +1,6 @@
 package com.codeteam.writer
 
+import com.codeteam.model.BodyKind
 import com.codeteam.model.Endpoint
 import com.codeteam.model.RequestBodyField
 import com.codeteam.model.RequestParameter
@@ -12,7 +13,49 @@ import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
 import kotlin.use
 
+data class CollectionDiff(
+    val added: List<String>,
+    val removed: List<String>,
+    val unchanged: List<String>
+)
+
 class BrunoWriter {
+
+    fun computeDiff(
+        projectRoot: Path,
+        endpoints: List<Endpoint>,
+        settings: BrunoGeneratorState,
+        outputRoot: Path = projectRoot
+    ): CollectionDiff {
+        val brunoRoot = outputRoot.resolve(collectionName(projectRoot))
+        val requestsDir = brunoRoot.resolve("requests")
+        val environmentsDir = brunoRoot.resolve("environments")
+
+        val expectedRequests = endpoints.mapIndexed { index, endpoint ->
+            requestFilePath(requestsDir, endpoint, index + 1)
+        }
+        val expectedEnvironments = settings.environments.map { environmentsDir.resolve("${slug(it.name)}.bru") }
+        val expected = (expectedRequests + expectedEnvironments).map { it.normalize() }.toSet()
+
+        val existing = (existingBruFiles(requestsDir) + existingBruFiles(environmentsDir))
+            .map { it.normalize() }.toSet()
+
+        fun rel(path: Path) = brunoRoot.relativize(path).toString()
+        return CollectionDiff(
+            added = (expected - existing).map(::rel).sorted(),
+            removed = (existing - expected).map(::rel).sorted(),
+            unchanged = (expected intersect existing).map(::rel).sorted()
+        )
+    }
+
+    private fun existingBruFiles(dir: Path): Set<Path> {
+        if (!Files.exists(dir)) return emptySet()
+        Files.walk(dir).use { stream ->
+            return stream.filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(".bru") }
+                .toList()
+                .toSet()
+        }
+    }
 
     fun writeCollection(
         projectRoot: Path,
@@ -34,11 +77,9 @@ class BrunoWriter {
         writeEnvironments(environmentsDir, settings.environments)
 
         endpoints.forEachIndexed { index, endpoint ->
-            val folderName = endpoint.path.trim('/').split('/').firstOrNull().orEmpty().ifBlank { "root" }
-            val endpointDir = requestsDir.resolve(folderName)
-            endpointDir.createDirectories()
-            val fileName = "%02d-%s.bru".format(index + 1, slug(endpoint.handlerName))
-            endpointDir.resolve(fileName).writeText(requestContent(endpoint, index + 1))
+            val requestFile = requestFilePath(requestsDir, endpoint, index + 1)
+            requestFile.parent.createDirectories()
+            requestFile.writeText(requestContent(endpoint, index + 1))
         }
 
         pruneStaleRequestFiles(requestsDir, endpoints)
@@ -93,8 +134,10 @@ class BrunoWriter {
 
             appendLine("$verbLower {")
             appendLine("  url: {{baseUrl}}$urlPath$queryString")
-            if (endpoint.hasRequestBody) {
-                appendLine("  body: json")
+            when (endpoint.bodyKind) {
+                BodyKind.JSON -> appendLine("  body: json")
+                BodyKind.MULTIPART -> appendLine("  body: multipart-form")
+                BodyKind.NONE -> {}
             }
             appendLine("  auth: none")
             appendLine("}")
@@ -116,7 +159,7 @@ class BrunoWriter {
             appendLine()
             appendLine("headers {")
             appendLine("  Accept: application/json")
-            if (endpoint.hasRequestBody) {
+            if (endpoint.bodyKind == BodyKind.JSON) {
                 appendLine("  Content-Type: application/json")
             }
             endpoint.headerParams.forEach { appendLine("  ${paramLine(it)}") }
@@ -125,15 +168,24 @@ class BrunoWriter {
             }
             appendLine("}")
 
-            if (endpoint.hasRequestBody) {
-                appendLine()
-                appendLine("body:json {")
-                appendLine(jsonObject(endpoint))
-                appendLine("}")
+            when (endpoint.bodyKind) {
+                BodyKind.JSON -> {
+                    appendLine()
+                    appendLine("body:json {")
+                    appendLine(jsonObject(endpoint))
+                    appendLine("}")
+                }
+                BodyKind.MULTIPART -> {
+                    appendLine()
+                    appendLine("body:multipart-form {")
+                    appendLine(multipartFormBlock(endpoint))
+                    appendLine("}")
+                }
+                BodyKind.NONE -> {}
             }
 
-            val patternNotes = endpoint.requestBodyFields.mapNotNull { field ->
-                field.constraints.pattern?.let { "field '${field.name}' must match pattern: $it" }
+            val patternNotes = endpoint.requestBodyFields.flattenWithPath().mapNotNull { (path, field) ->
+                field.constraints.pattern?.let { "field '$path' must match pattern: $it" }
             }
             if (patternNotes.isNotEmpty()) {
                 appendLine()
@@ -171,14 +223,58 @@ class BrunoWriter {
             val fallback = if (usesDynamicFakes(endpoint.httpMethod)) "{{\$randomUUID}}" else "{{usuarioId}}"
             return "  {\n    \"id\": \"$fallback\"\n  }"
         }
+        return "  " + renderObject(fields, usesDynamicFakes(endpoint.httpMethod), level = 2)
+    }
 
-        val dynamic = usesDynamicFakes(endpoint.httpMethod)
+    // level = indent depth (2-space units) of this object's own entries; its braces sit at level-1,
+    // with the opening brace emitted without a leading indent since callers place it right after "key": .
+    private fun renderObject(fields: List<RequestBodyField>, dynamic: Boolean, level: Int): String {
+        val closeIndent = "  ".repeat(level - 1)
+        val entryIndent = "  ".repeat(level)
         val entries = fields.joinToString(",\n") { field ->
-            val value = if (dynamic) dynamicFakeForField(field) else "{{${field.name}}}"
-            val valueText = if (quoteJsonValue(field)) "\"$value\"" else value
-            "    \"${field.name}\": $valueText"
+            "$entryIndent\"${field.name}\": ${renderFieldValue(field, dynamic, level + 1)}"
         }
-        return "  {\n$entries\n  }"
+        return "{\n$entries\n$closeIndent}"
+    }
+
+    private fun renderFieldValue(field: RequestBodyField, dynamic: Boolean, level: Int): String {
+        return when {
+            field.isCollection -> renderArrayValue(field, dynamic, level)
+            field.nestedFields.isNotEmpty() -> renderObject(field.nestedFields, dynamic, level)
+            else -> renderScalarValue(field, dynamic)
+        }
+    }
+
+    // level = indent depth of the array's single representative element; the brackets sit at level-1.
+    private fun renderArrayValue(field: RequestBodyField, dynamic: Boolean, level: Int): String {
+        val closeIndent = "  ".repeat(level - 1)
+        val elementIndent = "  ".repeat(level)
+        val element = if (field.nestedFields.isNotEmpty()) {
+            renderObject(field.nestedFields, dynamic, level + 1)
+        } else {
+            renderScalarValue(field, dynamic)
+        }
+        return "[\n$elementIndent$element\n$closeIndent]"
+    }
+
+    private fun renderScalarValue(field: RequestBodyField, dynamic: Boolean): String {
+        val value = if (dynamic) dynamicFakeForField(field) else "{{${field.name}}}"
+        return if (quoteJsonValue(field)) "\"$value\"" else value
+    }
+
+    private fun List<RequestBodyField>.flattenWithPath(prefix: String = ""): List<Pair<String, RequestBodyField>> =
+        flatMap { field ->
+            val path = if (prefix.isBlank()) field.name else "$prefix.${field.name}"
+            listOf(path to field) + field.nestedFields.flattenWithPath(path)
+        }
+
+    private fun multipartFormBlock(endpoint: Endpoint): String {
+        if (endpoint.multipartParts.isEmpty()) return "  file: @file()"
+        return endpoint.multipartParts.joinToString("\n") { part ->
+            val key = if (part.required) part.name else "~${part.name}"
+            val value = if (part.isFile) "@file()" else fakeValue(part.name, part.type)
+            "  $key: $value"
+        }
     }
 
     private fun quoteJsonValue(field: RequestBodyField): Boolean {
@@ -272,14 +368,16 @@ class BrunoWriter {
             .ifBlank { "request" }
     }
 
+    private fun requestFilePath(requestsDir: Path, endpoint: Endpoint, seq: Int): Path {
+        val folderName = endpoint.path.trim('/').split('/').firstOrNull().orEmpty().ifBlank { "root" }
+        return requestsDir.resolve(folderName).resolve("%02d-%s.bru".format(seq, slug(endpoint.handlerName)))
+    }
+
     private fun pruneStaleRequestFiles(requestsDir: Path, endpoints: List<Endpoint>) {
         if (!Files.exists(requestsDir)) return
 
         val expected = endpoints.mapIndexed { index, endpoint ->
-            val folderName = endpoint.path.trim('/').split('/').firstOrNull().orEmpty().ifBlank { "root" }
-            requestsDir.resolve(folderName).resolve("%02d-%s.bru".format(index + 1, slug(endpoint.handlerName)))
-                .normalize()
-                .toString()
+            requestFilePath(requestsDir, endpoint, index + 1).normalize().toString()
         }.toSet()
 
         Files.walk(requestsDir).use { stream ->

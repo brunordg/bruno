@@ -1,6 +1,8 @@
 package com.codeteam.scanner
 
+import com.codeteam.model.BodyKind
 import com.codeteam.model.Endpoint
+import com.codeteam.model.MultipartPart
 import com.codeteam.model.ParamKind
 import com.codeteam.model.RequestBodyField
 import com.codeteam.model.RequestParameter
@@ -9,6 +11,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.psi.JavaPsiFacade
 import com.intellij.psi.PsiAnnotation
+import com.intellij.psi.PsiArrayType
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiClassType
 import com.intellij.psi.PsiEnumConstant
@@ -16,8 +19,10 @@ import com.intellij.psi.PsiField
 import com.intellij.psi.PsiMethod
 import com.intellij.psi.PsiModifierListOwner
 import com.intellij.psi.PsiParameter
+import com.intellij.psi.PsiType
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.searches.AnnotatedElementsSearch
+import com.intellij.psi.util.InheritanceUtil
 
 class ControllerScanner {
 
@@ -45,20 +50,56 @@ class ControllerScanner {
             val mapping = methodMapping(method) ?: return@mapNotNull null
             val fullPath = normalizePath(classPath, mapping.second)
             val requestBodyParameter = method.requestBodyParameter()
-            val hasRequestBody = requestBodyParameter != null || mapping.first in verbsWithBody
+            val requestBodyFields = requestBodyParameter?.extractBodyFields().orEmpty()
+            val multipartParts = method.multipartParts()
+            val hasRequestBody = requestBodyParameter != null || multipartParts.isNotEmpty() || mapping.first in verbsWithBody
+            val bodyKind = when {
+                multipartParts.isNotEmpty() -> BodyKind.MULTIPART
+                hasRequestBody -> BodyKind.JSON
+                else -> BodyKind.NONE
+            }
             val parameters = method.parameterList.parameters
             Endpoint(
                 httpMethod = mapping.first,
                 path = fullPath,
                 handlerName = method.name,
                 hasRequestBody = hasRequestBody,
-                requestBodyFields = requestBodyParameter?.extractBodyFields().orEmpty(),
+                bodyKind = bodyKind,
+                requestBodyFields = requestBodyFields,
+                multipartParts = multipartParts,
                 pathVariables = parameters.extractParams(PATH_VARIABLE_FQN, ParamKind.PATH),
                 queryParams = parameters.extractParams(REQUEST_PARAM_FQN, ParamKind.QUERY),
                 headerParams = parameters.extractParams(REQUEST_HEADER_FQN, ParamKind.HEADER),
                 cookieParams = parameters.extractParams(COOKIE_VALUE_FQN, ParamKind.COOKIE)
             )
         }
+    }
+
+    private fun PsiMethod.multipartParts(): List<MultipartPart> =
+        parameterList.parameters.mapNotNull { it.toMultipartPart() }
+
+    private fun PsiParameter.toMultipartPart(): MultipartPart? {
+        val requestPart = modifierList?.findAnnotation(REQUEST_PART_FQN)
+        val isFile = isMultipartFileType(type) || isMultipartFileType(collectionElementType(type))
+        if (requestPart == null && !isFile) return null
+
+        val declaredName = requestPart?.findDeclaredAttributeValue("value")?.text
+            ?.let { trimQuotes(it) }?.takeIf { it.isNotBlank() }
+            ?: requestPart?.findDeclaredAttributeValue("name")?.text
+                ?.let { trimQuotes(it) }?.takeIf { it.isNotBlank() }
+        val explicitRequired = requestPart?.findDeclaredAttributeValue("required")?.text?.toBooleanStrictOrNull()
+
+        return MultipartPart(
+            name = declaredName ?: name.orEmpty(),
+            isFile = isFile,
+            type = type.presentableText,
+            required = explicitRequired ?: true
+        )
+    }
+
+    private fun isMultipartFileType(type: PsiType?): Boolean {
+        val resolved = (type as? PsiClassType)?.resolve() ?: return false
+        return resolved.qualifiedName == MULTIPART_FILE_FQN
     }
 
     private fun Array<PsiParameter>.extractParams(annotationFqn: String, kind: ParamKind): List<RequestParameter> {
@@ -90,30 +131,64 @@ class ControllerScanner {
 
     private fun PsiParameter.extractBodyFields(): List<RequestBodyField> {
         val psiClass = (type as? PsiClassType)?.resolve() ?: return emptyList()
+        return extractFields(psiClass, depth = 0, ancestry = emptySet())
+    }
+
+    private fun extractFields(psiClass: PsiClass, depth: Int, ancestry: Set<String>): List<RequestBodyField> {
         return psiClass.allFields
             .filterNot { it.hasModifierProperty("static") }
-            .mapNotNull { field -> field.toRequestBodyField() }
+            .mapNotNull { field -> field.toRequestBodyField(depth, ancestry) }
             .distinctBy { it.name }
             .sortedBy { it.name }
     }
 
-    private fun PsiField.toRequestBodyField(): RequestBodyField? {
+    private fun PsiField.toRequestBodyField(depth: Int, ancestry: Set<String>): RequestBodyField? {
         val fieldName = name.trim()
         if (fieldName.isBlank()) return null
-        val fieldClass = (type as? PsiClassType)?.resolve()
+
+        val elementType = collectionElementType(type)
+        val isCollection = elementType != null
+        val effectiveType = elementType ?: type
+
+        val fieldClass = (effectiveType as? PsiClassType)?.resolve()
         val isEnum = fieldClass?.isEnum == true
         val enumConstants = if (isEnum) {
             fieldClass.fields.filterIsInstance<PsiEnumConstant>().map { it.name }
         } else {
             emptyList()
         }
+
+        val nestedFields = if (fieldClass != null && !isEnum && depth < MAX_NESTING_DEPTH &&
+            isRecursableType(fieldClass) && fieldClass.qualifiedName !in ancestry
+        ) {
+            extractFields(fieldClass, depth + 1, ancestry + fieldClass.qualifiedName.orEmpty())
+        } else {
+            emptyList()
+        }
+
         return RequestBodyField(
             name = fieldName,
             type = type.presentableText,
             isEnum = isEnum,
             enumConstants = enumConstants,
-            constraints = extractConstraints()
+            constraints = extractConstraints(),
+            isCollection = isCollection,
+            nestedFields = nestedFields
         )
+    }
+
+    private fun collectionElementType(type: PsiType): PsiType? {
+        if (type is PsiArrayType) return type.componentType
+        val classType = type as? PsiClassType ?: return null
+        val psiClass = classType.resolve() ?: return null
+        if (!InheritanceUtil.isInheritor(psiClass, "java.util.Collection")) return null
+        return classType.parameters.firstOrNull()
+    }
+
+    private fun isRecursableType(psiClass: PsiClass): Boolean {
+        if (psiClass.isEnum || psiClass.isInterface || psiClass.isAnnotationType) return false
+        val qualifiedName = psiClass.qualifiedName ?: return false
+        return JDK_PACKAGE_PREFIXES.none { qualifiedName.startsWith(it) }
     }
 
     private fun PsiField.extractConstraints(): ValidationConstraints {
@@ -212,6 +287,12 @@ class ControllerScanner {
         private const val REQUEST_PARAM_FQN = "org.springframework.web.bind.annotation.RequestParam"
         private const val REQUEST_HEADER_FQN = "org.springframework.web.bind.annotation.RequestHeader"
         private const val COOKIE_VALUE_FQN = "org.springframework.web.bind.annotation.CookieValue"
+        private const val REQUEST_PART_FQN = "org.springframework.web.bind.annotation.RequestPart"
+        private const val MULTIPART_FILE_FQN = "org.springframework.web.multipart.MultipartFile"
+        private const val MAX_NESTING_DEPTH = 5
+        private val JDK_PACKAGE_PREFIXES = listOf(
+            "java.", "javax.", "jakarta.", "kotlin.", "org.springframework."
+        )
 
         private val NOT_NULL_ANNOTATIONS = listOf(
             "jakarta.validation.constraints.NotNull",
