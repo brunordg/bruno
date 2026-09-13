@@ -88,7 +88,9 @@ class BrunoWriter {
     }
 
     private fun resolveCollectionName(projectRoot: Path, settings: BrunoGeneratorState): String {
-        var baseName = settings.collectionName.ifBlank { "bruno-collection" }
+        val baseName = settings.collectionName.ifBlank {
+            projectRoot.fileName?.toString().orEmpty().ifBlank { "collection" }
+        }
         val prefix = settings.collectionNamePrefix.trim()
         val suffix = settings.collectionNameSuffix.trim()
         return "$prefix$baseName$suffix"

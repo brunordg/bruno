@@ -109,24 +109,25 @@ class BrunoWriterCollectionTest {
             environments = mutableListOf(BrunoEnvironment("dev", "http://localhost:8080"))
             defaultEnvironmentName = "dev"
             collectionName = "my-api-collection"
+            collectionNamePrefix = "custom-"
         }
         val endpoint = Endpoint(httpMethod = "GET", path = "/api/a", handlerName = "a", hasRequestBody = false)
 
         val brunoRoot = writer.writeCollection(projectRoot, listOf(endpoint), settings, outputRoot)
 
-        assertFalse(Files.exists(projectRoot.resolve("my-api-collection")))
-        assertTrue(Files.exists(outputRoot.resolve("my-api-collection")))
+        assertFalse(Files.exists(projectRoot.resolve("custom-my-api-collection")))
+        assertTrue(Files.exists(outputRoot.resolve("custom-my-api-collection")))
         assertTrue(brunoRoot.startsWith(outputRoot))
         assertTrue(Files.exists(brunoRoot.resolve("bruno.json")))
         assertTrue(Files.exists(brunoRoot.resolve("requests/api/01-a.bru")))
         assertTrue(
-            Files.readString(brunoRoot.resolve("bruno.json")).contains("my-api-collection")
+            Files.readString(brunoRoot.resolve("bruno.json")).contains("custom-my-api-collection")
         )
     }
 
     @Test
-    fun `uses bruno-collection as default name when no collection name is configured`() {
-        val projectRoot = Files.createTempDirectory("bruno-writer-default-test")
+    fun `uses project name with bruno prefix when collection name is empty`() {
+        val projectRoot = Files.createTempDirectory("my-project")
         val settings = BrunoGeneratorState().apply {
             environments = mutableListOf(BrunoEnvironment("dev", "http://localhost:8080"))
             defaultEnvironmentName = "dev"
@@ -135,25 +136,26 @@ class BrunoWriterCollectionTest {
 
         val brunoRoot = writer.writeCollection(projectRoot, listOf(endpoint), settings)
 
-        assertTrue(brunoRoot.fileName.toString().contains("bruno-collection"))
+        assertTrue(brunoRoot.fileName.toString().contains("bruno-my-project"))
         assertTrue(Files.exists(brunoRoot.resolve("bruno.json")))
     }
 
     @Test
-    fun `applies prefix and suffix to collection name`() {
-        val projectRoot = Files.createTempDirectory("bruno-writer-prefix-suffix-test")
+    fun `applies custom prefix and suffix to project name when collection name is empty`() {
+        val projectRoot = Files.createTempDirectory("my-api")
         val settings = BrunoGeneratorState().apply {
             environments = mutableListOf(BrunoEnvironment("dev", "http://localhost:8080"))
             defaultEnvironmentName = "dev"
-            collectionName = "api"
-            collectionNamePrefix = "prefix-"
-            collectionNameSuffix = "-suffix"
+            collectionNamePrefix = "test-"
+            collectionNameSuffix = "-v1"
         }
         val endpoint = Endpoint(httpMethod = "GET", path = "/api/a", handlerName = "a", hasRequestBody = false)
 
         val brunoRoot = writer.writeCollection(projectRoot, listOf(endpoint), settings)
 
-        assertTrue(brunoRoot.fileName.toString().contains("prefix-api-suffix"))
+        val folderName = brunoRoot.fileName.toString()
+        assertTrue(folderName.startsWith("test-my-api"))
+        assertTrue(folderName.endsWith("-v1"))
         assertTrue(Files.exists(brunoRoot.resolve("bruno.json")))
     }
 

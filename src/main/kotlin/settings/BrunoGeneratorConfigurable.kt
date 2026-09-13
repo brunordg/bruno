@@ -104,14 +104,10 @@ class BrunoGeneratorConfigurable(private val project: Project) : Configurable {
         if (values.none { it.name == defaultName }) {
             throw ConfigurationException("Default environment \"$defaultName\" does not match any configured environment name.")
         }
-        val collectionName = currentCollectionNameField.text.trim()
-        if (collectionName.isBlank()) {
-            throw ConfigurationException("Collection name cannot be empty.")
-        }
         settings.state.environments = values.map { it.copy() }.toMutableList()
         settings.state.defaultEnvironmentName = defaultName
         settings.state.outputDirectory = (outputDirectoryField ?: return).text.trim()
-        settings.state.collectionName = collectionName
+        settings.state.collectionName = currentCollectionNameField.text.trim()
         settings.state.collectionNamePrefix = (collectionNamePrefixField ?: return).text.trim()
         settings.state.collectionNameSuffix = (collectionNameSuffixField ?: return).text.trim()
     }

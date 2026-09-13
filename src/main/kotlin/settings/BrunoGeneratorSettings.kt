@@ -18,8 +18,8 @@ class BrunoGeneratorState {
     )
     var defaultEnvironmentName: String = "dev"
     var outputDirectory: String = ""
-    var collectionName: String = "bruno-collection"
-    var collectionNamePrefix: String = ""
+    var collectionName: String = ""
+    var collectionNamePrefix: String = "bruno-"
     var collectionNameSuffix: String = ""
 }
 
