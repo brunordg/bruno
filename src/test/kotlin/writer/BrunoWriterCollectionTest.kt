@@ -1,18 +1,10 @@
 package writer
 
-import com.codeteam.model.BodyKind
-import com.codeteam.model.Endpoint
-import com.codeteam.model.MultipartPart
-import com.codeteam.model.ParamKind
-import com.codeteam.model.RequestBodyField
-import com.codeteam.model.RequestParameter
-import com.codeteam.model.ValidationConstraints
+import com.codeteam.model.*
 import com.codeteam.settings.BrunoEnvironment
 import com.codeteam.settings.BrunoGeneratorState
 import com.codeteam.writer.BrunoWriter
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Test
 import java.nio.file.Files
 
@@ -110,26 +102,59 @@ class BrunoWriterCollectionTest {
     }
 
     @Test
-    fun `writes the collection under a custom output directory while keeping the project name`() {
+    fun `writes the collection under a custom output directory with configured collection name`() {
         val projectRoot = Files.createTempDirectory("bruno-writer-project")
         val outputRoot = Files.createTempDirectory("bruno-writer-custom-output")
+        val settings = BrunoGeneratorState().apply {
+            environments = mutableListOf(BrunoEnvironment("dev", "http://localhost:8080"))
+            defaultEnvironmentName = "dev"
+            collectionName = "my-api-collection"
+        }
+        val endpoint = Endpoint(httpMethod = "GET", path = "/api/a", handlerName = "a", hasRequestBody = false)
+
+        val brunoRoot = writer.writeCollection(projectRoot, listOf(endpoint), settings, outputRoot)
+
+        assertFalse(Files.exists(projectRoot.resolve("my-api-collection")))
+        assertTrue(Files.exists(outputRoot.resolve("my-api-collection")))
+        assertTrue(brunoRoot.startsWith(outputRoot))
+        assertTrue(Files.exists(brunoRoot.resolve("bruno.json")))
+        assertTrue(Files.exists(brunoRoot.resolve("requests/api/01-a.bru")))
+        assertTrue(
+            Files.readString(brunoRoot.resolve("bruno.json")).contains("my-api-collection")
+        )
+    }
+
+    @Test
+    fun `uses bruno-collection as default name when no collection name is configured`() {
+        val projectRoot = Files.createTempDirectory("bruno-writer-default-test")
         val settings = BrunoGeneratorState().apply {
             environments = mutableListOf(BrunoEnvironment("dev", "http://localhost:8080"))
             defaultEnvironmentName = "dev"
         }
         val endpoint = Endpoint(httpMethod = "GET", path = "/api/a", handlerName = "a", hasRequestBody = false)
 
-        val brunoRoot = writer.writeCollection(projectRoot, listOf(endpoint), settings, outputRoot)
+        val brunoRoot = writer.writeCollection(projectRoot, listOf(endpoint), settings)
 
-        val projectName = projectRoot.fileName.toString()
-        assertFalse(Files.exists(projectRoot.resolve(projectName)))
-        assertTrue(Files.exists(outputRoot.resolve(projectName)))
-        assertTrue(brunoRoot.startsWith(outputRoot))
+        assertTrue(brunoRoot.fileName.toString().contains("bruno-collection"))
         assertTrue(Files.exists(brunoRoot.resolve("bruno.json")))
-        assertTrue(Files.exists(brunoRoot.resolve("requests/api/01-a.bru")))
-        assertTrue(
-            Files.readString(brunoRoot.resolve("bruno.json")).contains(projectName)
-        )
+    }
+
+    @Test
+    fun `applies prefix and suffix to collection name`() {
+        val projectRoot = Files.createTempDirectory("bruno-writer-prefix-suffix-test")
+        val settings = BrunoGeneratorState().apply {
+            environments = mutableListOf(BrunoEnvironment("dev", "http://localhost:8080"))
+            defaultEnvironmentName = "dev"
+            collectionName = "api"
+            collectionNamePrefix = "prefix-"
+            collectionNameSuffix = "-suffix"
+        }
+        val endpoint = Endpoint(httpMethod = "GET", path = "/api/a", handlerName = "a", hasRequestBody = false)
+
+        val brunoRoot = writer.writeCollection(projectRoot, listOf(endpoint), settings)
+
+        assertTrue(brunoRoot.fileName.toString().contains("prefix-api-suffix"))
+        assertTrue(Files.exists(brunoRoot.resolve("bruno.json")))
     }
 
     @Test

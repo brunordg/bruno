@@ -18,6 +18,9 @@ class BrunoGeneratorState {
     )
     var defaultEnvironmentName: String = "dev"
     var outputDirectory: String = ""
+    var collectionName: String = "bruno-collection"
+    var collectionNamePrefix: String = ""
+    var collectionNameSuffix: String = ""
 }
 
 fun BrunoGeneratorState.resolvedDefaultBaseUrl(): String =

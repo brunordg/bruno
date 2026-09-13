@@ -11,7 +11,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
-import kotlin.use
 
 data class CollectionDiff(
     val added: List<String>,
@@ -27,7 +26,7 @@ class BrunoWriter {
         settings: BrunoGeneratorState,
         outputRoot: Path = projectRoot
     ): CollectionDiff {
-        val brunoRoot = outputRoot.resolve(collectionName(projectRoot))
+        val brunoRoot = outputRoot.resolve(resolveCollectionName(projectRoot, settings))
         val requestsDir = brunoRoot.resolve("requests")
         val environmentsDir = brunoRoot.resolve("environments")
 
@@ -63,7 +62,7 @@ class BrunoWriter {
         settings: BrunoGeneratorState,
         outputRoot: Path = projectRoot
     ): Path {
-        val collectionName = collectionName(projectRoot)
+        val collectionName = resolveCollectionName(projectRoot, settings)
         val brunoRoot = outputRoot.resolve(collectionName)
         val requestsDir = brunoRoot.resolve("requests")
         val environmentsDir = brunoRoot.resolve("environments")
@@ -88,8 +87,12 @@ class BrunoWriter {
         return brunoRoot
     }
 
-    private fun collectionName(projectRoot: Path): String =
-        projectRoot.fileName?.toString().orEmpty().ifBlank { "collection" }
+    private fun resolveCollectionName(projectRoot: Path, settings: BrunoGeneratorState): String {
+        var baseName = settings.collectionName.ifBlank { "bruno-collection" }
+        val prefix = settings.collectionNamePrefix.trim()
+        val suffix = settings.collectionNameSuffix.trim()
+        return "$prefix$baseName$suffix"
+    }
 
     private fun brunoJson(collectionName: String): String {
         return """

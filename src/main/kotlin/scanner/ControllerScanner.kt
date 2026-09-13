@@ -1,25 +1,9 @@
 package com.codeteam.scanner
 
-import com.codeteam.model.BodyKind
-import com.codeteam.model.Endpoint
-import com.codeteam.model.MultipartPart
-import com.codeteam.model.ParamKind
-import com.codeteam.model.RequestBodyField
-import com.codeteam.model.RequestParameter
-import com.codeteam.model.ValidationConstraints
+import com.codeteam.model.*
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
-import com.intellij.psi.JavaPsiFacade
-import com.intellij.psi.PsiAnnotation
-import com.intellij.psi.PsiArrayType
-import com.intellij.psi.PsiClass
-import com.intellij.psi.PsiClassType
-import com.intellij.psi.PsiEnumConstant
-import com.intellij.psi.PsiField
-import com.intellij.psi.PsiMethod
-import com.intellij.psi.PsiModifierListOwner
-import com.intellij.psi.PsiParameter
-import com.intellij.psi.PsiType
+import com.intellij.psi.*
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.searches.AnnotatedElementsSearch
 import com.intellij.psi.util.InheritanceUtil
