@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.codeteam"
-version = "1.2.0"
+version = "1.2.1"
 
 // Build with JDK 26 (the only JDK installed on this machine), but keep the compiled
 // bytecode at Java 21: IntelliJ Platform 2025.3.1's bundled JetBrains Runtime is JDK 21,
@@ -100,5 +100,18 @@ intellijPlatform {
 tasks {
     wrapper {
         gradleVersion = providers.gradleProperty("gradleVersion").get()
+    }
+
+    register<Copy>("copyPluginToRoot") {
+        from("build/distributions")
+        include("*.zip")
+        into(rootDir)
+        doLast {
+            println("✓ Plugin copied to project root")
+        }
+    }
+
+    buildPlugin {
+        finalizedBy("copyPluginToRoot")
     }
 }
