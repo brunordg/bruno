@@ -66,12 +66,19 @@ intellijPlatform {
         }
 
         changeNotes = """
+            <p><b>1.2.1:</b></p>
+            <ul>
+                <li>Customize the generated collection folder name with configurable prefix and suffix (Settings &gt; Tools &gt; Bruno Generator)</li>
+                <li>Collection name field now empty by default — uses project folder name as base</li>
+                <li>Default prefix is "bruno-" (e.g., project "users-api" → folder "bruno-users-api")</li>
+            </ul>
+            <p><b>1.2.0:</b></p>
             <ul>
                 <li>Request bodies now support nested objects, lists/arrays, and multipart file uploads (@RequestPart / MultipartFile), rendered as real JSON/multipart content instead of flat placeholders</li>
                 <li>Generating now opens a single screen to select which endpoints to include, with a live preview of which files will be added, removed, or left unchanged before anything is written to disk</li>
                 <li>Show a progress indicator while scanning controllers and while writing the collection</li>
             </ul>
-            <p>1.1.4:</p>
+            <p><b>1.1.4:</b></p>
             <ul>
                 <li>New projects now start with a single default environment (dev) instead of three</li>
                 <li>Add an optional output directory setting (Tools &gt; Bruno Generator) to generate the collection outside the project root</li>
