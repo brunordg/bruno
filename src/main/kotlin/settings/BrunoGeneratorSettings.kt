@@ -12,6 +12,22 @@ data class BrunoEnvironment(
     var baseUrl: String = ""
 )
 
+enum class RegenerationMode {
+    /** Rewrite every selected request and remove stale request files (default). */
+    OVERWRITE,
+
+    /** Only create missing request files; never overwrite or delete, preserving hand edits. */
+    ADD_ONLY
+}
+
+enum class AuthMode {
+    /** No collection auth; requests keep `auth: none` (default). */
+    NONE,
+    BEARER,
+    BASIC,
+    API_KEY
+}
+
 class BrunoGeneratorState {
     var environments: MutableList<BrunoEnvironment> = mutableListOf(
         BrunoEnvironment("dev", "http://localhost:8080")
@@ -21,6 +37,8 @@ class BrunoGeneratorState {
     var collectionName: String = ""
     var collectionNamePrefix: String = "bruno-"
     var collectionNameSuffix: String = ""
+    var regenerationMode: RegenerationMode = RegenerationMode.OVERWRITE
+    var authMode: AuthMode = AuthMode.NONE
 }
 
 fun BrunoGeneratorState.resolvedDefaultBaseUrl(): String =

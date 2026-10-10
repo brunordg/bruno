@@ -1,7 +1,9 @@
 package settings
 
+import com.codeteam.settings.AuthMode
 import com.codeteam.settings.BrunoEnvironment
 import com.codeteam.settings.BrunoGeneratorState
+import com.codeteam.settings.RegenerationMode
 import com.codeteam.settings.resolvedDefaultBaseUrl
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -43,5 +45,15 @@ class BrunoGeneratorStateTest {
         assertEquals("http://localhost:8080", state.environments.single().baseUrl)
         assertEquals("dev", state.defaultEnvironmentName)
         assertEquals("", state.outputDirectory)
+    }
+
+    @Test
+    fun `default regeneration mode is overwrite`() {
+        assertEquals(RegenerationMode.OVERWRITE, BrunoGeneratorState().regenerationMode)
+    }
+
+    @Test
+    fun `default auth mode is none`() {
+        assertEquals(AuthMode.NONE, BrunoGeneratorState().authMode)
     }
 }

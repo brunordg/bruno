@@ -5,19 +5,19 @@ plugins {
 }
 
 group = "com.codeteam"
-version = "1.2.1"
+version = "1.3.0"
 
-// Build with JDK 26 (the only JDK installed on this machine), but keep the compiled
+// Build with the JDK installed on this machine (currently JDK 25), but keep the compiled
 // bytecode at Java 21: IntelliJ Platform 2025.3.1's bundled JetBrains Runtime is JDK 21,
 // so a plugin whose classes target a newer class file version fails to load at runtime
 // (UnsupportedClassVersionError) even though it compiles and packages fine.
 kotlin {
-    jvmToolchain(26)
+    jvmToolchain(25)
 }
 
 java {
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(26))
+        languageVersion.set(JavaLanguageVersion.of(25))
     }
 }
 
@@ -56,6 +56,8 @@ dependencies {
 
     testImplementation("org.springframework:spring-web:6.2.1")
     testImplementation("jakarta.validation:jakarta.validation-api:3.1.1")
+    testImplementation("com.fasterxml.jackson.core:jackson-annotations:2.18.2")
+    testImplementation("io.swagger.core.v3:swagger-annotations:2.2.28")
     testImplementation("junit:junit:4.13.2")
 }
 
@@ -66,6 +68,14 @@ intellijPlatform {
         }
 
         changeNotes = """
+            <p><b>1.3.0:</b></p>
+            <ul>
+                <li>Request bodies now respect Jackson annotations: @JsonProperty renames keys and @JsonIgnore / access = READ_ONLY fields are omitted (class-level @JsonNaming and @JsonInclude are not yet supported)</li>
+                <li>Enrich requests from springdoc / OpenAPI 3 annotations: @Operation(summary) names the request, @Operation/@Parameter/@Schema descriptions fill the docs block, and @Schema(example) sets the field value (taking precedence over validation and heuristic fakes)</li>
+                <li>Stable request file names derived from the endpoint method and path, so changing the selection no longer renumbers files (expect a one-time rename on the first regeneration after upgrading)</li>
+                <li>New "Add-only" regeneration mode that only creates missing request files, preserving manual edits; "Overwrite" remains the default</li>
+                <li>Configurable authentication (Bearer, Basic, API Key): sets collection-level auth that every request inherits, with credential variables provisioned per environment</li>
+            </ul>
             <p><b>1.2.1:</b></p>
             <ul>
                 <li>Customize the generated collection folder name with configurable prefix and suffix (Settings &gt; Tools &gt; Bruno Generator)</li>

@@ -5,6 +5,7 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.options.ConfigurationException
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.TextBrowseFolderListener
 import com.intellij.openapi.ui.TextFieldWithBrowseButton
 import com.intellij.ui.components.JBTextField
@@ -22,6 +23,8 @@ class BrunoGeneratorConfigurable(private val project: Project) : Configurable {
     private var collectionNameField: JBTextField? = null
     private var collectionNamePrefixField: JBTextField? = null
     private var collectionNameSuffixField: JBTextField? = null
+    private var regenerationModeCombo: ComboBox<RegenerationMode>? = null
+    private var authModeCombo: ComboBox<AuthMode>? = null
 
     override fun getDisplayName(): String = MyMessageBundle.message("settings.displayName")
 
@@ -49,6 +52,12 @@ class BrunoGeneratorConfigurable(private val project: Project) : Configurable {
         val newCollectionNameSuffixField = JBTextField()
         collectionNameSuffixField = newCollectionNameSuffixField
 
+        val newRegenerationModeCombo = ComboBox(RegenerationMode.entries.toTypedArray())
+        regenerationModeCombo = newRegenerationModeCombo
+
+        val newAuthModeCombo = ComboBox(AuthMode.entries.toTypedArray())
+        authModeCombo = newAuthModeCombo
+
         val panel = panel {
             row {
                 cell(editor.createComponent()).align(Align.FILL)
@@ -68,6 +77,12 @@ class BrunoGeneratorConfigurable(private val project: Project) : Configurable {
             row("Collection name suffix (optional):") {
                 cell(newCollectionNameSuffixField).align(Align.FILL)
             }.rowComment("Appended to the collection name")
+            row("Regeneration mode:") {
+                cell(newRegenerationModeCombo).align(Align.FILL)
+            }.rowComment("Overwrite rewrites all requests and removes stale files; Add-only only creates missing requests and preserves manual edits")
+            row("Authentication:") {
+                cell(newAuthModeCombo).align(Align.FILL)
+            }.rowComment("Sets collection-level auth; requests inherit it. Fill the credential variables (token/username/password/apiKey) per environment")
         }
         reset()
         return panel
@@ -84,8 +99,16 @@ class BrunoGeneratorConfigurable(private val project: Project) : Configurable {
             currentOutputDirectoryField.text.trim() != settings.state.outputDirectory ||
             currentCollectionNameField.text.trim() != settings.state.collectionName ||
             currentCollectionNamePrefixField.text.trim() != settings.state.collectionNamePrefix ||
-            currentCollectionNameSuffixField.text.trim() != settings.state.collectionNameSuffix
+            currentCollectionNameSuffixField.text.trim() != settings.state.collectionNameSuffix ||
+            selectedRegenerationMode() != settings.state.regenerationMode ||
+            selectedAuthMode() != settings.state.authMode
     }
+
+    private fun selectedRegenerationMode(): RegenerationMode =
+        regenerationModeCombo?.selectedItem as? RegenerationMode ?: RegenerationMode.OVERWRITE
+
+    private fun selectedAuthMode(): AuthMode =
+        authModeCombo?.selectedItem as? AuthMode ?: AuthMode.NONE
 
     override fun apply() {
         val editor = tableEditor ?: return
@@ -110,6 +133,8 @@ class BrunoGeneratorConfigurable(private val project: Project) : Configurable {
         settings.state.collectionName = currentCollectionNameField.text.trim()
         settings.state.collectionNamePrefix = (collectionNamePrefixField ?: return).text.trim()
         settings.state.collectionNameSuffix = (collectionNameSuffixField ?: return).text.trim()
+        settings.state.regenerationMode = selectedRegenerationMode()
+        settings.state.authMode = selectedAuthMode()
     }
 
     override fun reset() {
@@ -119,5 +144,7 @@ class BrunoGeneratorConfigurable(private val project: Project) : Configurable {
         collectionNameField?.text = settings.state.collectionName
         collectionNamePrefixField?.text = settings.state.collectionNamePrefix
         collectionNameSuffixField?.text = settings.state.collectionNameSuffix
+        regenerationModeCombo?.selectedItem = settings.state.regenerationMode
+        authModeCombo?.selectedItem = settings.state.authMode
     }
 }

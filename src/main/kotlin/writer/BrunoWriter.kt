@@ -4,8 +4,10 @@ import com.codeteam.model.BodyKind
 import com.codeteam.model.Endpoint
 import com.codeteam.model.RequestBodyField
 import com.codeteam.model.RequestParameter
+import com.codeteam.settings.AuthMode
 import com.codeteam.settings.BrunoEnvironment
 import com.codeteam.settings.BrunoGeneratorState
+import com.codeteam.settings.RegenerationMode
 import com.codeteam.settings.resolvedDefaultBaseUrl
 import java.nio.file.Files
 import java.nio.file.Path
@@ -30,9 +32,7 @@ class BrunoWriter {
         val requestsDir = brunoRoot.resolve("requests")
         val environmentsDir = brunoRoot.resolve("environments")
 
-        val expectedRequests = endpoints.mapIndexed { index, endpoint ->
-            requestFilePath(requestsDir, endpoint, index + 1)
-        }
+        val expectedRequests = endpoints.map { requestFilePath(requestsDir, it) }
         val expectedEnvironments = settings.environments.map { environmentsDir.resolve("${slug(it.name)}.bru") }
         val expected = (expectedRequests + expectedEnvironments).map { it.normalize() }.toSet()
 
@@ -40,6 +40,17 @@ class BrunoWriter {
             .map { it.normalize() }.toSet()
 
         fun rel(path: Path) = brunoRoot.relativize(path).toString()
+
+        // Add-only never deletes, so nothing is reported as removed and every existing
+        // file stays as-is; only genuinely missing files are added.
+        if (settings.regenerationMode == RegenerationMode.ADD_ONLY) {
+            return CollectionDiff(
+                added = (expected - existing).map(::rel).sorted(),
+                removed = emptyList(),
+                unchanged = existing.map(::rel).sorted()
+            )
+        }
+
         return CollectionDiff(
             added = (expected - existing).map(::rel).sorted(),
             removed = (existing - expected).map(::rel).sorted(),
@@ -67,22 +78,32 @@ class BrunoWriter {
         val requestsDir = brunoRoot.resolve("requests")
         val environmentsDir = brunoRoot.resolve("environments")
 
+        val addOnly = settings.regenerationMode == RegenerationMode.ADD_ONLY
+
         brunoRoot.createDirectories()
         requestsDir.createDirectories()
 
         brunoRoot.resolve("bruno.json").writeText(brunoJson(collectionName))
-        brunoRoot.resolve("collection.bru").writeText(collectionVariables(settings.resolvedDefaultBaseUrl()))
+        brunoRoot.resolve("collection.bru").writeText(collectionFileContent(settings))
 
-        writeEnvironments(environmentsDir, settings.environments)
+        writeEnvironments(environmentsDir, settings.environments, settings.authMode)
 
-        endpoints.forEachIndexed { index, endpoint ->
-            val requestFile = requestFilePath(requestsDir, endpoint, index + 1)
+        // Deterministic ordering: stable file names come from method+path, and the
+        // meta `seq` comes from this sort order, never from the selection index.
+        val ordered = endpoints.sortedWith(compareBy<Endpoint> { it.path }.thenBy { it.httpMethod })
+        ordered.forEachIndexed { index, endpoint ->
+            val requestFile = requestFilePath(requestsDir, endpoint)
+            // Add-only preserves existing (possibly hand-edited) request files.
+            if (addOnly && Files.exists(requestFile)) return@forEachIndexed
             requestFile.parent.createDirectories()
-            requestFile.writeText(requestContent(endpoint, index + 1))
+            requestFile.writeText(requestContent(endpoint, index + 1, settings.authMode))
         }
 
-        pruneStaleRequestFiles(requestsDir, endpoints)
-        pruneStaleEnvironmentFiles(environmentsDir, settings.environments)
+        // Add-only never deletes, so pruning is skipped entirely in that mode.
+        if (!addOnly) {
+            pruneStaleRequestFiles(requestsDir, ordered)
+            pruneStaleEnvironmentFiles(environmentsDir, settings.environments)
+        }
 
         return brunoRoot
     }
@@ -106,26 +127,72 @@ class BrunoWriter {
         """.trimIndent() + "\n"
     }
 
-    private fun collectionVariables(defaultBaseUrl: String): String {
-        return """
+    private fun collectionFileContent(settings: BrunoGeneratorState): String {
+        val vars = """
             vars:pre-request {
-              baseUrl: $defaultBaseUrl
+              baseUrl: ${settings.resolvedDefaultBaseUrl()}
+            }
+        """.trimIndent() + "\n"
+        val auth = authBlock(settings.authMode)
+        return if (auth.isEmpty()) vars else vars + "\n" + auth
+    }
+
+    private fun authBlock(mode: AuthMode): String = when (mode) {
+        AuthMode.NONE -> ""
+        AuthMode.BEARER -> """
+            auth {
+              mode: bearer
+            }
+            auth:bearer {
+              token: {{token}}
+            }
+        """.trimIndent() + "\n"
+        AuthMode.BASIC -> """
+            auth {
+              mode: basic
+            }
+            auth:basic {
+              username: {{username}}
+              password: {{password}}
+            }
+        """.trimIndent() + "\n"
+        AuthMode.API_KEY -> """
+            auth {
+              mode: apikey
+            }
+            auth:apikey {
+              key: X-API-Key
+              value: {{apiKey}}
+              placement: header
             }
         """.trimIndent() + "\n"
     }
 
-    private fun writeEnvironments(environmentsDir: Path, environments: List<BrunoEnvironment>) {
+    private fun credentialKeys(mode: AuthMode): List<String> = when (mode) {
+        AuthMode.NONE -> emptyList()
+        AuthMode.BEARER -> listOf("token")
+        AuthMode.BASIC -> listOf("username", "password")
+        AuthMode.API_KEY -> listOf("apiKey")
+    }
+
+    private fun writeEnvironments(
+        environmentsDir: Path,
+        environments: List<BrunoEnvironment>,
+        authMode: AuthMode
+    ) {
         environmentsDir.createDirectories()
+        val credentialLines = credentialKeys(authMode).map { "  $it:" }
         environments.forEach { environment ->
+            val lines = listOf("  baseUrl: ${environment.baseUrl}") + credentialLines
             environmentsDir.resolve("${slug(environment.name)}.bru").writeText(
-                "vars {\n  baseUrl: ${environment.baseUrl}\n}\n"
+                "vars {\n" + lines.joinToString("\n") + "\n}\n"
             )
         }
     }
 
-    private fun requestContent(endpoint: Endpoint, seq: Int): String {
+    private fun requestContent(endpoint: Endpoint, seq: Int, authMode: AuthMode): String {
         val verbLower = endpoint.httpMethod.lowercase()
-        val name = "${endpoint.httpMethod} ${endpoint.path}"
+        val name = endpoint.summary?.let(::collapseWhitespace) ?: "${endpoint.httpMethod} ${endpoint.path}"
         val urlPath = toBrunoUrlPath(endpoint.path)
         val queryString = buildQueryString(endpoint.queryParams)
 
@@ -144,7 +211,7 @@ class BrunoWriter {
                 BodyKind.MULTIPART -> appendLine("  body: multipart-form")
                 BodyKind.NONE -> {}
             }
-            appendLine("  auth: none")
+            appendLine("  auth: ${if (authMode == AuthMode.NONE) "none" else "inherit"}")
             appendLine("}")
 
             if (endpoint.pathVariables.isNotEmpty()) {
@@ -189,18 +256,31 @@ class BrunoWriter {
                 BodyKind.NONE -> {}
             }
 
-            val patternNotes = endpoint.requestBodyFields.flattenWithPath().mapNotNull { (path, field) ->
-                field.constraints.pattern?.let { "field '$path' must match pattern: $it" }
+            val docLines = buildList {
+                endpoint.description?.let { add(collapseWhitespace(it)) }
+                (endpoint.pathVariables + endpoint.queryParams + endpoint.headerParams + endpoint.cookieParams)
+                    .forEach { param ->
+                        param.description?.let { add("param '${param.name}': ${collapseWhitespace(it)}") }
+                    }
+                endpoint.requestBodyFields.flattenWithPath().forEach { (path, field) ->
+                    field.description?.let { add("field '$path': ${collapseWhitespace(it)}") }
+                }
+                endpoint.requestBodyFields.flattenWithPath().forEach { (path, field) ->
+                    field.constraints.pattern?.let { add("field '$path' must match pattern: $it") }
+                }
             }
-            if (patternNotes.isNotEmpty()) {
+            if (docLines.isNotEmpty()) {
                 appendLine()
                 appendLine("docs {")
-                patternNotes.forEach { appendLine("  $it") }
+                docLines.forEach { appendLine("  $it") }
                 appendLine("}")
             }
         }
         return content + "\n"
     }
+
+    private fun collapseWhitespace(text: String): String =
+        text.replace(Regex("\\s*\\n\\s*"), " ").trim()
 
     private fun paramLine(param: RequestParameter): String {
         val key = if (param.required) param.name else "~${param.name}"
@@ -263,7 +343,13 @@ class BrunoWriter {
     }
 
     private fun renderScalarValue(field: RequestBodyField, dynamic: Boolean): String {
-        val value = if (dynamic) dynamicFakeForField(field) else "{{${field.name}}}"
+        // Precedence: an explicit @Schema(example) wins over constraint-derived and
+        // name/type heuristic values.
+        val value = when {
+            field.example != null -> field.example
+            dynamic -> dynamicFakeForField(field)
+            else -> "{{${field.name}}}"
+        }
         return if (quoteJsonValue(field)) "\"$value\"" else value
     }
 
@@ -373,16 +459,18 @@ class BrunoWriter {
             .ifBlank { "request" }
     }
 
-    private fun requestFilePath(requestsDir: Path, endpoint: Endpoint, seq: Int): Path {
+    // Stable, selection-independent file name derived from the endpoint's method and
+    // path. method+path is unique per endpoint, so distinct endpoints never collide.
+    private fun requestFilePath(requestsDir: Path, endpoint: Endpoint): Path {
         val folderName = endpoint.path.trim('/').split('/').firstOrNull().orEmpty().ifBlank { "root" }
-        return requestsDir.resolve(folderName).resolve("%02d-%s.bru".format(seq, slug(endpoint.handlerName)))
+        return requestsDir.resolve(folderName).resolve("${slug("${endpoint.httpMethod} ${endpoint.path}")}.bru")
     }
 
     private fun pruneStaleRequestFiles(requestsDir: Path, endpoints: List<Endpoint>) {
         if (!Files.exists(requestsDir)) return
 
-        val expected = endpoints.mapIndexed { index, endpoint ->
-            requestFilePath(requestsDir, endpoint, index + 1).normalize().toString()
+        val expected = endpoints.map { endpoint ->
+            requestFilePath(requestsDir, endpoint).normalize().toString()
         }.toSet()
 
         Files.walk(requestsDir).use { stream ->

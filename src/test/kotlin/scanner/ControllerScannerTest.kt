@@ -2,6 +2,8 @@ package scanner
 
 import com.codeteam.model.BodyKind
 import com.codeteam.scanner.ControllerScanner
+import com.fasterxml.jackson.annotation.JsonProperty
+import io.swagger.v3.oas.annotations.Operation
 import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.projectRoots.impl.JavaAwareProjectJdkTableImpl
 import com.intellij.openapi.roots.ModuleRootModificationUtil
@@ -29,6 +31,8 @@ class ControllerScannerTest : BasePlatformTestCase() {
         PsiTestUtil.addLibrary(module, PathManager.getJarPathForClass(RestController::class.java)!!)
         PsiTestUtil.addLibrary(module, PathManager.getJarPathForClass(NotNull::class.java)!!)
         PsiTestUtil.addLibrary(module, PathManager.getJarPathForClass(MultipartFile::class.java)!!)
+        PsiTestUtil.addLibrary(module, PathManager.getJarPathForClass(JsonProperty::class.java)!!)
+        PsiTestUtil.addLibrary(module, PathManager.getJarPathForClass(Operation::class.java)!!)
     }
 
     fun `test scans a rest controller for params, path variables, headers, cookies and a validated body`() {
@@ -221,6 +225,200 @@ class ControllerScannerTest : BasePlatformTestCase() {
 
         val grandparentField = parentField.nestedFields.first { it.name == "parent" }
         assertTrue(grandparentField.nestedFields.isEmpty())
+    }
+
+    fun `test respects jackson property renames and ignores on fields`() {
+        myFixture.addFileToProject(
+            "AccountController.java",
+            """
+            import org.springframework.web.bind.annotation.*;
+
+            @RestController
+            @RequestMapping("/api/accounts")
+            public class AccountController {
+                @PostMapping
+                public Object create(@RequestBody CreateAccountRequest body) {
+                    return null;
+                }
+            }
+            """.trimIndent()
+        )
+        myFixture.addFileToProject(
+            "CreateAccountRequest.java",
+            """
+            import com.fasterxml.jackson.annotation.JsonProperty;
+            import com.fasterxml.jackson.annotation.JsonIgnore;
+
+            public class CreateAccountRequest {
+                @JsonProperty("user_name")
+                public String userName;
+                @JsonIgnore
+                public String internalFlag;
+                @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+                public String id;
+                public String email;
+            }
+            """.trimIndent()
+        )
+
+        val endpoints = ControllerScanner().scan(project)
+        val postEndpoint = endpoints.first { it.httpMethod == "POST" }
+        val names = postEndpoint.requestBodyFields.map { it.name }.toSet()
+
+        assertEquals(setOf("user_name", "email"), names)
+        assertTrue(names.none { it == "userName" })
+        assertTrue(names.none { it == "internalFlag" })
+        assertTrue(names.none { it == "id" })
+    }
+
+    fun `test resolves jackson property name from getter and record component`() {
+        myFixture.addFileToProject(
+            "ProfileController.java",
+            """
+            import org.springframework.web.bind.annotation.*;
+
+            @RestController
+            @RequestMapping("/api/profiles")
+            public class ProfileController {
+                @PostMapping("/getter")
+                public Object withGetter(@RequestBody GetterRequest body) {
+                    return null;
+                }
+                @PostMapping("/record")
+                public Object withRecord(@RequestBody RecordRequest body) {
+                    return null;
+                }
+            }
+            """.trimIndent()
+        )
+        myFixture.addFileToProject(
+            "GetterRequest.java",
+            """
+            import com.fasterxml.jackson.annotation.JsonProperty;
+
+            public class GetterRequest {
+                private String displayName;
+
+                @JsonProperty("display_name")
+                public String getDisplayName() { return displayName; }
+                public void setDisplayName(String v) { this.displayName = v; }
+            }
+            """.trimIndent()
+        )
+        myFixture.addFileToProject(
+            "RecordRequest.java",
+            """
+            import com.fasterxml.jackson.annotation.JsonProperty;
+
+            public record RecordRequest(
+                @JsonProperty("zip_code") String zipCode,
+                String city
+            ) {}
+            """.trimIndent()
+        )
+
+        val endpoints = ControllerScanner().scan(project)
+
+        val getterEndpoint = endpoints.first { it.path == "/api/profiles/getter" }
+        assertEquals(setOf("display_name"), getterEndpoint.requestBodyFields.map { it.name }.toSet())
+
+        val recordEndpoint = endpoints.first { it.path == "/api/profiles/record" }
+        assertEquals(setOf("zip_code", "city"), recordEndpoint.requestBodyFields.map { it.name }.toSet())
+    }
+
+    fun `test jackson resolution applies to nested object fields`() {
+        myFixture.addFileToProject(
+            "ShipmentController.java",
+            """
+            import org.springframework.web.bind.annotation.*;
+
+            @RestController
+            @RequestMapping("/api/shipments")
+            public class ShipmentController {
+                @PostMapping
+                public Object create(@RequestBody ShipmentRequest body) {
+                    return null;
+                }
+            }
+            """.trimIndent()
+        )
+        myFixture.addFileToProject(
+            "ShipmentRequest.java",
+            """
+            public class ShipmentRequest {
+                public ShipmentAddress address;
+            }
+            """.trimIndent()
+        )
+        myFixture.addFileToProject(
+            "ShipmentAddress.java",
+            """
+            import com.fasterxml.jackson.annotation.JsonProperty;
+            import com.fasterxml.jackson.annotation.JsonIgnore;
+
+            public class ShipmentAddress {
+                @JsonProperty("zip_code")
+                public String zipCode;
+                @JsonIgnore
+                public String secret;
+            }
+            """.trimIndent()
+        )
+
+        val endpoints = ControllerScanner().scan(project)
+        val postEndpoint = endpoints.first { it.httpMethod == "POST" }
+        val addressField = postEndpoint.requestBodyFields.first { it.name == "address" }
+
+        assertEquals(setOf("zip_code"), addressField.nestedFields.map { it.name }.toSet())
+    }
+
+    fun `test extracts springdoc operation, schema and parameter annotations`() {
+        myFixture.addFileToProject(
+            "CatalogController.java",
+            """
+            import org.springframework.web.bind.annotation.*;
+            import io.swagger.v3.oas.annotations.Operation;
+            import io.swagger.v3.oas.annotations.Parameter;
+
+            @RestController
+            @RequestMapping("/api/catalog")
+            public class CatalogController {
+                @Operation(summary = "Create a catalog item", description = "Adds a new item")
+                @PostMapping
+                public Object create(
+                    @RequestParam @Parameter(description = "Tenant to scope to") String tenant,
+                    @RequestBody CatalogItem body
+                ) {
+                    return null;
+                }
+            }
+            """.trimIndent()
+        )
+        myFixture.addFileToProject(
+            "CatalogItem.java",
+            """
+            import io.swagger.v3.oas.annotations.media.Schema;
+
+            public class CatalogItem {
+                @Schema(example = "42", description = "Item age in days")
+                public int age;
+                public String label;
+            }
+            """.trimIndent()
+        )
+
+        val endpoints = ControllerScanner().scan(project)
+        val postEndpoint = endpoints.first { it.httpMethod == "POST" }
+
+        assertEquals("Create a catalog item", postEndpoint.summary)
+        assertEquals("Adds a new item", postEndpoint.description)
+
+        val tenant = postEndpoint.queryParams.first { it.name == "tenant" }
+        assertEquals("Tenant to scope to", tenant.description)
+
+        val ageField = postEndpoint.requestBodyFields.first { it.name == "age" }
+        assertEquals("42", ageField.example)
+        assertEquals("Item age in days", ageField.description)
     }
 
     fun `test detects multipart request parts and file uploads`() {

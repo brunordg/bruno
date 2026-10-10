@@ -2,3 +2,5 @@
 .idea
 .intellijPlatform
 build
+# SpecRunner (logs locais de execução)
+.specrunner/runs/

@@ -7,7 +7,8 @@ data class RequestParameter(
     val kind: ParamKind,
     val type: String,
     val required: Boolean,
-    val defaultValue: String? = null
+    val defaultValue: String? = null,
+    val description: String? = null
 )
 
 data class ValidationConstraints(
@@ -27,7 +28,9 @@ data class RequestBodyField(
     val enumConstants: List<String> = emptyList(),
     val constraints: ValidationConstraints = ValidationConstraints(),
     val isCollection: Boolean = false,
-    val nestedFields: List<RequestBodyField> = emptyList()
+    val nestedFields: List<RequestBodyField> = emptyList(),
+    val example: String? = null,
+    val description: String? = null
 )
 
 enum class BodyKind { NONE, JSON, MULTIPART }
@@ -44,6 +47,8 @@ data class Endpoint(
     val path: String,
     val handlerName: String,
     val hasRequestBody: Boolean,
+    val summary: String? = null,
+    val description: String? = null,
     val bodyKind: BodyKind = BodyKind.NONE,
     val requestBodyFields: List<RequestBodyField> = emptyList(),
     val multipartParts: List<MultipartPart> = emptyList(),

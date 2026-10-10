@@ -43,11 +43,14 @@ class ControllerScanner {
                 else -> BodyKind.NONE
             }
             val parameters = method.parameterList.parameters
+            val operation = method.modifierList.findAnnotation(OPERATION_FQN)
             Endpoint(
                 httpMethod = mapping.first,
                 path = fullPath,
                 handlerName = method.name,
                 hasRequestBody = hasRequestBody,
+                summary = operation?.attributeText("summary"),
+                description = operation?.attributeText("description"),
                 bodyKind = bodyKind,
                 requestBodyFields = requestBodyFields,
                 multipartParts = multipartParts,
@@ -102,7 +105,8 @@ class ControllerScanner {
                 kind = kind,
                 type = parameter.type.presentableText,
                 required = required,
-                defaultValue = defaultValueText
+                defaultValue = defaultValueText,
+                description = parameter.modifierList?.findAnnotation(PARAMETER_FQN)?.attributeText("description")
             )
         }
     }
@@ -121,13 +125,61 @@ class ControllerScanner {
     private fun extractFields(psiClass: PsiClass, depth: Int, ancestry: Set<String>): List<RequestBodyField> {
         return psiClass.allFields
             .filterNot { it.hasModifierProperty("static") }
+            .filterNot { it.isJacksonExcluded() }
             .mapNotNull { field -> field.toRequestBodyField(depth, ancestry) }
             .distinctBy { it.name }
             .sortedBy { it.name }
     }
 
+    // Jackson can declare a property's name or ignore it on any of its accessors
+    // (the field, the getter, a constructor parameter, or a record component), so
+    // collect every owner that could carry a Jackson annotation for this field.
+    private fun PsiField.jacksonAccessors(): List<PsiModifierListOwner> {
+        val owners = mutableListOf<PsiModifierListOwner>(this)
+        val owner = containingClass ?: return owners
+        val capitalized = name.replaceFirstChar { it.uppercaseChar() }
+        owner.findMethodsByName("get$capitalized", true).forEach { owners.add(it) }
+        owner.findMethodsByName("is$capitalized", true).forEach { owners.add(it) }
+        owner.findMethodsByName(name, true).forEach { owners.add(it) } // record accessor
+        owner.constructors.forEach { ctor ->
+            ctor.parameterList.parameters.firstOrNull { it.name == name }?.let { owners.add(it) }
+        }
+        if (owner.isRecord) {
+            owner.recordComponents.firstOrNull { it.name == name }?.let { owners.add(it) }
+        }
+        return owners
+    }
+
+    private fun PsiField.jacksonProperty(): PsiAnnotation? =
+        jacksonAccessors().firstNotNullOfOrNull { it.modifierList?.findAnnotation(JSON_PROPERTY_FQN) }
+
+    // Finds an annotation (e.g. @Schema) wherever it may sit for this property:
+    // the field, its getter, a constructor parameter, or a record component.
+    private fun PsiField.findPropertyAnnotation(fqn: String): PsiAnnotation? =
+        jacksonAccessors().firstNotNullOfOrNull { it.modifierList?.findAnnotation(fqn) }
+
+    private fun PsiAnnotation.attributeText(name: String): String? =
+        findDeclaredAttributeValue(name)?.text?.let { trimQuotes(it) }?.takeIf { it.isNotBlank() }
+
+    private fun PsiField.resolvedJsonName(): String {
+        val declared = jacksonProperty()
+            ?.findDeclaredAttributeValue("value")?.text
+            ?.let { trimQuotes(it) }
+            ?.takeIf { it.isNotBlank() }
+        return declared ?: name.trim()
+    }
+
+    private fun PsiField.isJacksonExcluded(): Boolean {
+        val accessors = jacksonAccessors()
+        if (accessors.any { it.hasAnnotation(JSON_IGNORE_FQN) }) return true
+        val access = accessors.firstNotNullOfOrNull {
+            it.modifierList?.findAnnotation(JSON_PROPERTY_FQN)?.findDeclaredAttributeValue("access")?.text
+        }
+        return access?.contains("READ_ONLY") == true
+    }
+
     private fun PsiField.toRequestBodyField(depth: Int, ancestry: Set<String>): RequestBodyField? {
-        val fieldName = name.trim()
+        val fieldName = resolvedJsonName()
         if (fieldName.isBlank()) return null
 
         val elementType = collectionElementType(type)
@@ -150,6 +202,7 @@ class ControllerScanner {
             emptyList()
         }
 
+        val schema = findPropertyAnnotation(SCHEMA_FQN)
         return RequestBodyField(
             name = fieldName,
             type = type.presentableText,
@@ -157,7 +210,9 @@ class ControllerScanner {
             enumConstants = enumConstants,
             constraints = extractConstraints(),
             isCollection = isCollection,
-            nestedFields = nestedFields
+            nestedFields = nestedFields,
+            example = schema?.attributeText("example"),
+            description = schema?.attributeText("description")
         )
     }
 
@@ -273,6 +328,11 @@ class ControllerScanner {
         private const val COOKIE_VALUE_FQN = "org.springframework.web.bind.annotation.CookieValue"
         private const val REQUEST_PART_FQN = "org.springframework.web.bind.annotation.RequestPart"
         private const val MULTIPART_FILE_FQN = "org.springframework.web.multipart.MultipartFile"
+        private const val JSON_PROPERTY_FQN = "com.fasterxml.jackson.annotation.JsonProperty"
+        private const val JSON_IGNORE_FQN = "com.fasterxml.jackson.annotation.JsonIgnore"
+        private const val OPERATION_FQN = "io.swagger.v3.oas.annotations.Operation"
+        private const val SCHEMA_FQN = "io.swagger.v3.oas.annotations.media.Schema"
+        private const val PARAMETER_FQN = "io.swagger.v3.oas.annotations.Parameter"
         private const val MAX_NESTING_DEPTH = 5
         private val JDK_PACKAGE_PREFIXES = listOf(
             "java.", "javax.", "jakarta.", "kotlin.", "org.springframework."
