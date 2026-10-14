@@ -47,6 +47,7 @@ data class Endpoint(
     val path: String,
     val handlerName: String,
     val hasRequestBody: Boolean,
+    val controllerName: String = "",
     val summary: String? = null,
     val description: String? = null,
     val bodyKind: BodyKind = BodyKind.NONE,

@@ -13,7 +13,7 @@ The plugin scans Spring MVC endpoints, detects HTTP methods, paths, and request 
 - Creates example JSON bodies with smart sample values
 - Respects Jackson annotations on request bodies: `@JsonProperty` renames keys and `@JsonIgnore` / `access = READ_ONLY` fields are omitted (class-level `@JsonNaming` and `@JsonInclude` are not yet supported)
 - Enriches requests from springdoc / OpenAPI 3 annotations: `@Operation(summary)` names the request, `@Operation`/`@Parameter`/`@Schema` descriptions fill the `docs` block, and `@Schema(example)` sets the field value (taking precedence over validation and heuristic fakes). Swagger v2 and `@Tag`-based grouping are not covered.
-- Organizes requests by route path for easier navigation
+- Configurable folder strategy for organizing requests — **By URL path** (default, nests folders mirroring the endpoint path), **By controller** (one folder per controller class), or **Flat** (all requests directly under `requests/`); pick it per generation in the dialog or set the persisted default in Settings
 - Configurable environments (Settings > Tools > Bruno Generator) — starts with a single `dev` environment, and you can add as many as you need
 - Configurable authentication (None, Bearer, Basic, API Key): sets collection-level auth that every request inherits, with credential variables (`token` / `username`+`password` / `apiKey`) provisioned per environment for you to fill in (per-endpoint auth exceptions and Spring Security detection are out of scope)
 - Optional output directory setting, so the collection can be generated outside the project root
@@ -33,6 +33,14 @@ Two **regeneration modes** are available (Settings > Tools > Bruno Generator):
 
 - **Overwrite** (default): rewrites all selected requests and removes request files and environments that no longer exist in your code or settings, keeping the collection fully in sync.
 - **Add-only**: only creates request files that don't exist yet, never overwriting or deleting — so any manual edits to generated requests are preserved.
+
+Three **folder strategies** control how request files are grouped. Set a persisted default in **Settings > Tools > Bruno Generator**, or override it per generation from the dialog (the diff preview updates as you switch):
+
+- **By URL path** (default): nests folders mirroring the endpoint path (e.g. `GET /api/widgets/{id}` → `requests/api/widgets/id/`).
+- **By controller**: one folder per declaring controller class (e.g. `WidgetController` → `requests/widget-controller/`).
+- **Flat**: all request files directly under `requests/`, with no subfolders.
+
+File names stay stable within a strategy; expect a one-time folder reshuffle the first time you regenerate after changing the strategy.
 
 ## Why use it?
 
@@ -68,7 +76,7 @@ O plugin analisa endpoints Spring MVC, identifica métodos HTTP, rotas e parâme
 - Cria bodies JSON de exemplo com valores inteligentes
 - Respeita anotações Jackson no request body: `@JsonProperty` renomeia as chaves e campos `@JsonIgnore` / `access = READ_ONLY` são omitidos (`@JsonNaming` no nível da classe e `@JsonInclude` ainda não são suportados)
 - Enriquece os requests com anotações springdoc / OpenAPI 3: `@Operation(summary)` nomeia o request, descrições de `@Operation`/`@Parameter`/`@Schema` preenchem o bloco `docs`, e `@Schema(example)` define o valor do campo (com precedência sobre validação e fakes heurísticos). Swagger v2 e agrupamento por `@Tag` não são cobertos.
-- Organiza os requests por rota para facilitar a navegação
+- Estratégia de agrupamento configurável para organizar os requests — **Por rota (URL)** (padrão, aninha pastas espelhando a rota do endpoint), **Por controller** (uma pasta por classe de controller) ou **Plano** (todos os requests direto em `requests/`); escolha por geração no diálogo ou defina o padrão persistido nas Configurações
 - Ambientes configuráveis (Settings > Tools > Bruno Generator) — começa com um único ambiente `dev`, e você pode adicionar quantos precisar
 - Autenticação configurável (None, Bearer, Basic, API Key): define a auth no nível da collection que todo request herda, com variáveis de credencial (`token` / `username`+`password` / `apiKey`) provisionadas por ambiente para você preencher (exceções de auth por endpoint e detecção de Spring Security estão fora do escopo)
 - Diretório de saída opcional, permitindo gerar a collection fora da raiz do projeto
@@ -88,6 +96,14 @@ Há dois **modos de regeneração** (Settings > Tools > Bruno Generator):
 
 - **Overwrite** (padrão): reescreve todos os requests selecionados e remove requests e ambientes que não existem mais no código ou nas configurações, mantendo a collection sincronizada.
 - **Add-only**: apenas cria arquivos de request que ainda não existem, nunca sobrescrevendo nem removendo — preservando qualquer edição manual feita nos requests gerados.
+
+Três **estratégias de agrupamento** controlam como os arquivos de request são organizados. Defina o padrão persistido em **Settings > Tools > Bruno Generator**, ou sobrescreva por geração no diálogo (o preview do diff atualiza ao trocar):
+
+- **Por rota (URL)** (padrão): aninha pastas espelhando a rota do endpoint (ex.: `GET /api/widgets/{id}` → `requests/api/widgets/id/`).
+- **Por controller**: uma pasta por classe de controller declarante (ex.: `WidgetController` → `requests/widget-controller/`).
+- **Plano**: todos os arquivos de request direto em `requests/`, sem subpastas.
+
+Os nomes dos arquivos permanecem estáveis dentro de cada estratégia; espere um rearranjo único de pastas na primeira regeneração após trocar a estratégia.
 
 ## Por que usar?
 

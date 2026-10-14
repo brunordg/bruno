@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.codeteam"
-version = "1.3.0"
+version = "1.4.0"
 
 // Build with the JDK installed on this machine (currently JDK 25), but keep the compiled
 // bytecode at Java 21: IntelliJ Platform 2025.3.1's bundled JetBrains Runtime is JDK 21,
@@ -68,6 +68,12 @@ intellijPlatform {
         }
 
         changeNotes = """
+            <p><b>1.4.0:</b></p>
+            <ul>
+                <li>Configurable folder strategy for generated requests: "By URL path" (default) nests folders mirroring the endpoint path, "By controller" groups one folder per controller class, and "Flat" puts every request directly under requests/</li>
+                <li>Pick the folder strategy per generation in the selection dialog (with a live diff preview) or set the persisted default in Settings &gt; Tools &gt; Bruno Generator</li>
+                <li>Request file names stay stable per strategy (expect a one-time folder reshuffle on the first regeneration after changing the strategy)</li>
+            </ul>
             <p><b>1.3.0:</b></p>
             <ul>
                 <li>Request bodies now respect Jackson annotations: @JsonProperty renames keys and @JsonIgnore / access = READ_ONLY fields are omitted (class-level @JsonNaming and @JsonInclude are not yet supported)</li>
