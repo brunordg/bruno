@@ -25,6 +25,7 @@ class BrunoGeneratorConfigurable(private val project: Project) : Configurable {
     private var collectionNameSuffixField: JBTextField? = null
     private var regenerationModeCombo: ComboBox<RegenerationMode>? = null
     private var authModeCombo: ComboBox<AuthMode>? = null
+    private var folderStrategyCombo: ComboBox<FolderStrategy>? = null
 
     override fun getDisplayName(): String = MyMessageBundle.message("settings.displayName")
 
@@ -58,6 +59,9 @@ class BrunoGeneratorConfigurable(private val project: Project) : Configurable {
         val newAuthModeCombo = ComboBox(AuthMode.entries.toTypedArray())
         authModeCombo = newAuthModeCombo
 
+        val newFolderStrategyCombo = ComboBox(FolderStrategy.entries.toTypedArray())
+        folderStrategyCombo = newFolderStrategyCombo
+
         val panel = panel {
             row {
                 cell(editor.createComponent()).align(Align.FILL)
@@ -83,6 +87,9 @@ class BrunoGeneratorConfigurable(private val project: Project) : Configurable {
             row("Authentication:") {
                 cell(newAuthModeCombo).align(Align.FILL)
             }.rowComment("Sets collection-level auth; requests inherit it. Fill the credential variables (token/username/password/apiKey) per environment")
+            row("Folder strategy:") {
+                cell(newFolderStrategyCombo).align(Align.FILL)
+            }.rowComment("Default grouping of request files: By URL path mirrors the endpoint path; By controller groups per controller class; Flat puts all requests directly under requests/. Can be overridden per generation in the dialog")
         }
         reset()
         return panel
@@ -101,7 +108,8 @@ class BrunoGeneratorConfigurable(private val project: Project) : Configurable {
             currentCollectionNamePrefixField.text.trim() != settings.state.collectionNamePrefix ||
             currentCollectionNameSuffixField.text.trim() != settings.state.collectionNameSuffix ||
             selectedRegenerationMode() != settings.state.regenerationMode ||
-            selectedAuthMode() != settings.state.authMode
+            selectedAuthMode() != settings.state.authMode ||
+            selectedFolderStrategy() != settings.state.folderStrategy
     }
 
     private fun selectedRegenerationMode(): RegenerationMode =
@@ -109,6 +117,9 @@ class BrunoGeneratorConfigurable(private val project: Project) : Configurable {
 
     private fun selectedAuthMode(): AuthMode =
         authModeCombo?.selectedItem as? AuthMode ?: AuthMode.NONE
+
+    private fun selectedFolderStrategy(): FolderStrategy =
+        folderStrategyCombo?.selectedItem as? FolderStrategy ?: FolderStrategy.BY_URL_PATH
 
     override fun apply() {
         val editor = tableEditor ?: return
@@ -135,6 +146,7 @@ class BrunoGeneratorConfigurable(private val project: Project) : Configurable {
         settings.state.collectionNameSuffix = (collectionNameSuffixField ?: return).text.trim()
         settings.state.regenerationMode = selectedRegenerationMode()
         settings.state.authMode = selectedAuthMode()
+        settings.state.folderStrategy = selectedFolderStrategy()
     }
 
     override fun reset() {
@@ -146,5 +158,6 @@ class BrunoGeneratorConfigurable(private val project: Project) : Configurable {
         collectionNameSuffixField?.text = settings.state.collectionNameSuffix
         regenerationModeCombo?.selectedItem = settings.state.regenerationMode
         authModeCombo?.selectedItem = settings.state.authMode
+        folderStrategyCombo?.selectedItem = settings.state.folderStrategy
     }
 }

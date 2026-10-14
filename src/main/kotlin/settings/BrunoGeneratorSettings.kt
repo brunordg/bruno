@@ -28,6 +28,17 @@ enum class AuthMode {
     API_KEY
 }
 
+enum class FolderStrategy {
+    /** Nested folders mirroring the endpoint's URL path (default). */
+    BY_URL_PATH,
+
+    /** One folder per declaring controller class. */
+    BY_CONTROLLER,
+
+    /** All request files directly under requests/, no subfolder. */
+    FLAT
+}
+
 class BrunoGeneratorState {
     var environments: MutableList<BrunoEnvironment> = mutableListOf(
         BrunoEnvironment("dev", "http://localhost:8080")
@@ -39,6 +50,7 @@ class BrunoGeneratorState {
     var collectionNameSuffix: String = ""
     var regenerationMode: RegenerationMode = RegenerationMode.OVERWRITE
     var authMode: AuthMode = AuthMode.NONE
+    var folderStrategy: FolderStrategy = FolderStrategy.BY_URL_PATH
 }
 
 fun BrunoGeneratorState.resolvedDefaultBaseUrl(): String =

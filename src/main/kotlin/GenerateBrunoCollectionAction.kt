@@ -73,6 +73,7 @@ class GenerateBrunoCollectionAction : AnAction(), DumbAware {
         val dialog = EndpointSelectionDialog(project, endpoints, projectRoot, settings, outputRoot, writer)
         if (!dialog.showAndGet()) return
         val selected = dialog.selectedEndpoints()
+        val folderStrategy = dialog.selectedFolderStrategy()
         if (selected.isEmpty()) {
             notify(project, "Nothing selected", "No endpoints were selected; generation cancelled.", NotificationType.INFORMATION)
             return
@@ -84,7 +85,7 @@ class GenerateBrunoCollectionAction : AnAction(), DumbAware {
             override fun run(indicator: ProgressIndicator) {
                 indicator.isIndeterminate = true
                 indicator.text = "Writing Bruno collection…"
-                brunoRoot = writer.writeCollection(projectRoot, selected, settings, outputRoot)
+                brunoRoot = writer.writeCollection(projectRoot, selected, settings, outputRoot, folderStrategy)
                 LocalFileSystem.getInstance().refreshAndFindFileByNioFile(brunoRoot)
             }
 

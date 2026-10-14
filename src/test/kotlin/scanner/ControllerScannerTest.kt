@@ -90,6 +90,10 @@ class ControllerScannerTest : BasePlatformTestCase() {
 
         assertEquals(2, endpoints.size)
 
+        // Each scanned endpoint carries its declaring controller's simple name,
+        // which the writer uses for the by-controller folder strategy.
+        assertTrue(endpoints.all { it.controllerName == "WidgetController" })
+
         val getEndpoint = endpoints.first { it.httpMethod == "GET" }
         assertEquals("/api/widgets/{id}", getEndpoint.path)
 

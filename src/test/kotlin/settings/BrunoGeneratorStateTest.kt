@@ -3,6 +3,7 @@ package settings
 import com.codeteam.settings.AuthMode
 import com.codeteam.settings.BrunoEnvironment
 import com.codeteam.settings.BrunoGeneratorState
+import com.codeteam.settings.FolderStrategy
 import com.codeteam.settings.RegenerationMode
 import com.codeteam.settings.resolvedDefaultBaseUrl
 import org.junit.Assert.assertEquals
@@ -55,5 +56,10 @@ class BrunoGeneratorStateTest {
     @Test
     fun `default auth mode is none`() {
         assertEquals(AuthMode.NONE, BrunoGeneratorState().authMode)
+    }
+
+    @Test
+    fun `default folder strategy is by url path`() {
+        assertEquals(FolderStrategy.BY_URL_PATH, BrunoGeneratorState().folderStrategy)
     }
 }

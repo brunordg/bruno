@@ -2,8 +2,10 @@ package com.codeteam.ui
 
 import com.codeteam.model.Endpoint
 import com.codeteam.settings.BrunoGeneratorState
+import com.codeteam.settings.FolderStrategy
 import com.codeteam.writer.BrunoWriter
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.ui.CheckboxTree
 import com.intellij.ui.CheckboxTreeBase
@@ -14,8 +16,10 @@ import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.ui.tree.TreeUtil
 import java.awt.BorderLayout
 import java.awt.Dimension
+import java.awt.FlowLayout
 import java.nio.file.Path
 import javax.swing.JComponent
+import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.JSplitPane
 import javax.swing.JTree
@@ -35,9 +39,12 @@ class EndpointSelectionDialog(
     private val root = CheckedTreeNode(null)
     private val tree: CheckboxTree
     private val diffPanel = JPanel(BorderLayout())
+    private val folderStrategyCombo = ComboBox(FolderStrategy.entries.toTypedArray())
 
     init {
         title = "Generate Bruno Collection"
+        folderStrategyCombo.selectedItem = settings.folderStrategy
+        folderStrategyCombo.addActionListener { refreshDiff() }
         groupEndpointsByTopPath(endpoints).toSortedMap().forEach { (group, groupEndpoints) ->
             val groupNode = CheckedTreeNode(group)
             groupEndpoints.forEach { endpoint -> groupNode.add(CheckedTreeNode(endpoint)) }
@@ -61,6 +68,16 @@ class EndpointSelectionDialog(
         return split
     }
 
+    override fun createNorthPanel(): JComponent {
+        val panel = JPanel(FlowLayout(FlowLayout.LEFT))
+        panel.add(JLabel("Folder strategy:"))
+        panel.add(folderStrategyCombo)
+        return panel
+    }
+
+    fun selectedFolderStrategy(): FolderStrategy =
+        folderStrategyCombo.selectedItem as? FolderStrategy ?: FolderStrategy.BY_URL_PATH
+
     fun selectedEndpoints(): List<Endpoint> {
         val result = mutableListOf<Endpoint>()
         fun walk(node: CheckedTreeNode) {
@@ -77,7 +94,7 @@ class EndpointSelectionDialog(
     }
 
     private fun refreshDiff() {
-        val diff = writer.computeDiff(projectRoot, selectedEndpoints(), settings, outputRoot)
+        val diff = writer.computeDiff(projectRoot, selectedEndpoints(), settings, outputRoot, selectedFolderStrategy())
         diffPanel.removeAll()
         diffPanel.add(
             panel {

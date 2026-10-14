@@ -7,6 +7,7 @@ import com.codeteam.model.RequestParameter
 import com.codeteam.settings.AuthMode
 import com.codeteam.settings.BrunoEnvironment
 import com.codeteam.settings.BrunoGeneratorState
+import com.codeteam.settings.FolderStrategy
 import com.codeteam.settings.RegenerationMode
 import com.codeteam.settings.resolvedDefaultBaseUrl
 import java.nio.file.Files
@@ -26,13 +27,14 @@ class BrunoWriter {
         projectRoot: Path,
         endpoints: List<Endpoint>,
         settings: BrunoGeneratorState,
-        outputRoot: Path = projectRoot
+        outputRoot: Path = projectRoot,
+        folderStrategy: FolderStrategy = settings.folderStrategy
     ): CollectionDiff {
         val brunoRoot = outputRoot.resolve(resolveCollectionName(projectRoot, settings))
         val requestsDir = brunoRoot.resolve("requests")
         val environmentsDir = brunoRoot.resolve("environments")
 
-        val expectedRequests = endpoints.map { requestFilePath(requestsDir, it) }
+        val expectedRequests = endpoints.map { requestFilePath(requestsDir, it, folderStrategy) }
         val expectedEnvironments = settings.environments.map { environmentsDir.resolve("${slug(it.name)}.bru") }
         val expected = (expectedRequests + expectedEnvironments).map { it.normalize() }.toSet()
 
@@ -71,7 +73,8 @@ class BrunoWriter {
         projectRoot: Path,
         endpoints: List<Endpoint>,
         settings: BrunoGeneratorState,
-        outputRoot: Path = projectRoot
+        outputRoot: Path = projectRoot,
+        folderStrategy: FolderStrategy = settings.folderStrategy
     ): Path {
         val collectionName = resolveCollectionName(projectRoot, settings)
         val brunoRoot = outputRoot.resolve(collectionName)
@@ -92,7 +95,7 @@ class BrunoWriter {
         // meta `seq` comes from this sort order, never from the selection index.
         val ordered = endpoints.sortedWith(compareBy<Endpoint> { it.path }.thenBy { it.httpMethod })
         ordered.forEachIndexed { index, endpoint ->
-            val requestFile = requestFilePath(requestsDir, endpoint)
+            val requestFile = requestFilePath(requestsDir, endpoint, folderStrategy)
             // Add-only preserves existing (possibly hand-edited) request files.
             if (addOnly && Files.exists(requestFile)) return@forEachIndexed
             requestFile.parent.createDirectories()
@@ -101,7 +104,7 @@ class BrunoWriter {
 
         // Add-only never deletes, so pruning is skipped entirely in that mode.
         if (!addOnly) {
-            pruneStaleRequestFiles(requestsDir, ordered)
+            pruneStaleRequestFiles(requestsDir, ordered, folderStrategy)
             pruneStaleEnvironmentFiles(environmentsDir, settings.environments)
         }
 
@@ -461,16 +464,34 @@ class BrunoWriter {
 
     // Stable, selection-independent file name derived from the endpoint's method and
     // path. method+path is unique per endpoint, so distinct endpoints never collide.
-    private fun requestFilePath(requestsDir: Path, endpoint: Endpoint): Path {
-        val folderName = endpoint.path.trim('/').split('/').firstOrNull().orEmpty().ifBlank { "root" }
-        return requestsDir.resolve(folderName).resolve("${slug("${endpoint.httpMethod} ${endpoint.path}")}.bru")
+    // Only the containing folder depends on the chosen strategy.
+    private fun requestFilePath(requestsDir: Path, endpoint: Endpoint, strategy: FolderStrategy): Path {
+        val fileName = "${slug("${endpoint.httpMethod} ${endpoint.path}")}.bru"
+        return requestFolder(requestsDir, endpoint, strategy).resolve(fileName)
     }
 
-    private fun pruneStaleRequestFiles(requestsDir: Path, endpoints: List<Endpoint>) {
+    private fun requestFolder(requestsDir: Path, endpoint: Endpoint, strategy: FolderStrategy): Path =
+        when (strategy) {
+            FolderStrategy.FLAT -> requestsDir
+            FolderStrategy.BY_CONTROLLER ->
+                requestsDir.resolve(slug(endpoint.controllerName).ifBlank { "root" })
+            FolderStrategy.BY_URL_PATH -> {
+                val segments = endpoint.path.trim('/').split('/')
+                    .map { slug(it) }
+                    .filter { it.isNotBlank() }
+                segments.fold(requestsDir) { dir, segment -> dir.resolve(segment) }
+            }
+        }
+
+    private fun pruneStaleRequestFiles(
+        requestsDir: Path,
+        endpoints: List<Endpoint>,
+        strategy: FolderStrategy
+    ) {
         if (!Files.exists(requestsDir)) return
 
         val expected = endpoints.map { endpoint ->
-            requestFilePath(requestsDir, endpoint).normalize().toString()
+            requestFilePath(requestsDir, endpoint, strategy).normalize().toString()
         }.toSet()
 
         Files.walk(requestsDir).use { stream ->

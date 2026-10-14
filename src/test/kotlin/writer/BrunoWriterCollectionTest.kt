@@ -4,6 +4,7 @@ import com.codeteam.model.*
 import com.codeteam.settings.AuthMode
 import com.codeteam.settings.BrunoEnvironment
 import com.codeteam.settings.BrunoGeneratorState
+import com.codeteam.settings.FolderStrategy
 import com.codeteam.settings.RegenerationMode
 import com.codeteam.writer.BrunoWriter
 import org.junit.Assert.*
@@ -59,7 +60,7 @@ class BrunoWriterCollectionTest {
         assertTrue(Files.readString(brunoRoot.resolve("environments/dev.bru")).contains("baseUrl: http://localhost:8080"))
         assertTrue(Files.readString(brunoRoot.resolve("environments/staging.bru")).contains("baseUrl: https://staging.example.com"))
 
-        val requestFile = brunoRoot.resolve("requests/api/post-api-widgets-id.bru")
+        val requestFile = brunoRoot.resolve("requests/api/widgets/id/post-api-widgets-id.bru")
         assertTrue(Files.exists(requestFile))
         val requestText = Files.readString(requestFile)
 
@@ -90,15 +91,15 @@ class BrunoWriterCollectionTest {
         val endpointB = Endpoint(httpMethod = "GET", path = "/api/b", handlerName = "b", hasRequestBody = false)
 
         val brunoRoot = writer.writeCollection(projectRoot, listOf(endpointA, endpointB), settings)
-        assertTrue(Files.exists(brunoRoot.resolve("requests/api/get-api-a.bru")))
-        assertTrue(Files.exists(brunoRoot.resolve("requests/api/get-api-b.bru")))
+        assertTrue(Files.exists(brunoRoot.resolve("requests/api/a/get-api-a.bru")))
+        assertTrue(Files.exists(brunoRoot.resolve("requests/api/b/get-api-b.bru")))
         assertTrue(Files.exists(brunoRoot.resolve("environments/staging.bru")))
 
         settings.environments.removeIf { it.name == "staging" }
         writer.writeCollection(projectRoot, listOf(endpointA), settings)
 
-        assertTrue(Files.exists(brunoRoot.resolve("requests/api/get-api-a.bru")))
-        assertFalse(Files.exists(brunoRoot.resolve("requests/api/get-api-b.bru")))
+        assertTrue(Files.exists(brunoRoot.resolve("requests/api/a/get-api-a.bru")))
+        assertFalse(Files.exists(brunoRoot.resolve("requests/api/b/get-api-b.bru")))
         assertFalse(Files.exists(brunoRoot.resolve("environments/staging.bru")))
         assertTrue(Files.exists(brunoRoot.resolve("environments/dev.bru")))
     }
@@ -121,7 +122,7 @@ class BrunoWriterCollectionTest {
         assertTrue(Files.exists(outputRoot.resolve("custom-my-api-collection")))
         assertTrue(brunoRoot.startsWith(outputRoot))
         assertTrue(Files.exists(brunoRoot.resolve("bruno.json")))
-        assertTrue(Files.exists(brunoRoot.resolve("requests/api/get-api-a.bru")))
+        assertTrue(Files.exists(brunoRoot.resolve("requests/api/a/get-api-a.bru")))
         assertTrue(
             Files.readString(brunoRoot.resolve("bruno.json")).contains("custom-my-api-collection")
         )
@@ -195,7 +196,7 @@ class BrunoWriterCollectionTest {
         )
 
         val brunoRoot = writer.writeCollection(projectRoot, listOf(endpoint), settings)
-        val requestText = Files.readString(brunoRoot.resolve("requests/api/post-api-orders.bru"))
+        val requestText = Files.readString(brunoRoot.resolve("requests/api/orders/post-api-orders.bru"))
 
         assertTrue(requestText.contains("\"shippingAddress\": {"))
         assertTrue(requestText.contains("\"city\": "))
@@ -225,7 +226,7 @@ class BrunoWriterCollectionTest {
         )
 
         val brunoRoot = writer.writeCollection(projectRoot, listOf(endpoint), settings)
-        val requestText = Files.readString(brunoRoot.resolve("requests/api/post-api-uploads.bru"))
+        val requestText = Files.readString(brunoRoot.resolve("requests/api/uploads/post-api-uploads.bru"))
 
         assertTrue(requestText.contains("body: multipart-form"))
         assertTrue(requestText.contains("body:multipart-form {"))
@@ -302,7 +303,7 @@ class BrunoWriterCollectionTest {
         assertTrue(collectionText.contains("auth:bearer {"))
         assertTrue(collectionText.contains("token: {{token}}"))
 
-        val requestText = Files.readString(brunoRoot.resolve("requests/api/get-api-a.bru"))
+        val requestText = Files.readString(brunoRoot.resolve("requests/api/a/get-api-a.bru"))
         assertTrue(requestText.contains("auth: inherit"))
         assertFalse(requestText.contains("auth: none"))
 
@@ -350,7 +351,7 @@ class BrunoWriterCollectionTest {
         val collectionText = Files.readString(brunoRoot.resolve("collection.bru"))
         assertFalse(collectionText.contains("auth"))
 
-        val requestText = Files.readString(brunoRoot.resolve("requests/api/get-api-a.bru"))
+        val requestText = Files.readString(brunoRoot.resolve("requests/api/a/get-api-a.bru"))
         assertTrue(requestText.contains("auth: none"))
 
         val envText = Files.readString(brunoRoot.resolve("environments/dev.bru"))
@@ -404,14 +405,14 @@ class BrunoWriterCollectionTest {
 
         val diff = writer.computeDiff(projectRoot, listOf(endpointA, endpointC), settings)
 
-        assertEquals(setOf("requests/api/get-api-c.bru"), diff.added.toSet())
-        assertEquals(setOf("requests/api/get-api-b.bru", "environments/staging.bru"), diff.removed.toSet())
-        assertEquals(setOf("requests/api/get-api-a.bru", "environments/dev.bru"), diff.unchanged.toSet())
+        assertEquals(setOf("requests/api/c/get-api-c.bru"), diff.added.toSet())
+        assertEquals(setOf("requests/api/b/get-api-b.bru", "environments/staging.bru"), diff.removed.toSet())
+        assertEquals(setOf("requests/api/a/get-api-a.bru", "environments/dev.bru"), diff.unchanged.toSet())
 
-        assertTrue(Files.exists(brunoRoot.resolve("requests/api/get-api-a.bru")))
-        assertTrue(Files.exists(brunoRoot.resolve("requests/api/get-api-b.bru")))
+        assertTrue(Files.exists(brunoRoot.resolve("requests/api/a/get-api-a.bru")))
+        assertTrue(Files.exists(brunoRoot.resolve("requests/api/b/get-api-b.bru")))
         assertTrue(Files.exists(brunoRoot.resolve("environments/staging.bru")))
-        assertFalse(Files.exists(brunoRoot.resolve("requests/api/get-api-c.bru")))
+        assertFalse(Files.exists(brunoRoot.resolve("requests/api/c/get-api-c.bru")))
     }
 
     @Test
@@ -427,8 +428,8 @@ class BrunoWriterCollectionTest {
         val subsetBruno = writer.writeCollection(subsetRoot, listOf(endpointB), settings)
 
         // Endpoint B keeps the same relative path whether or not A is also selected.
-        assertTrue(Files.exists(fullBruno.resolve("requests/api/get-api-b.bru")))
-        assertTrue(Files.exists(subsetBruno.resolve("requests/api/get-api-b.bru")))
+        assertTrue(Files.exists(fullBruno.resolve("requests/api/b/get-api-b.bru")))
+        assertTrue(Files.exists(subsetBruno.resolve("requests/api/b/get-api-b.bru")))
     }
 
     @Test
@@ -440,8 +441,8 @@ class BrunoWriterCollectionTest {
 
         val brunoRoot = writer.writeCollection(projectRoot, listOf(get, post), settings)
 
-        assertTrue(Files.exists(brunoRoot.resolve("requests/api/get-api-widgets.bru")))
-        assertTrue(Files.exists(brunoRoot.resolve("requests/api/post-api-widgets.bru")))
+        assertTrue(Files.exists(brunoRoot.resolve("requests/api/widgets/get-api-widgets.bru")))
+        assertTrue(Files.exists(brunoRoot.resolve("requests/api/widgets/post-api-widgets.bru")))
     }
 
     @Test
@@ -451,7 +452,7 @@ class BrunoWriterCollectionTest {
         val endpoint = Endpoint(httpMethod = "GET", path = "/api/a", handlerName = "a", hasRequestBody = false)
 
         val brunoRoot = writer.writeCollection(projectRoot, listOf(endpoint), settings)
-        val requestFile = brunoRoot.resolve("requests/api/get-api-a.bru")
+        val requestFile = brunoRoot.resolve("requests/api/a/get-api-a.bru")
         Files.writeString(requestFile, "hand edited content")
 
         writer.writeCollection(projectRoot, listOf(endpoint), settings)
@@ -469,7 +470,7 @@ class BrunoWriterCollectionTest {
         writer.writeCollection(projectRoot, listOf(endpointA), settings)
         val brunoRoot = writer.writeCollection(projectRoot, listOf(endpointA, endpointB), settings)
 
-        assertTrue(Files.exists(brunoRoot.resolve("requests/api/get-api-b.bru")))
+        assertTrue(Files.exists(brunoRoot.resolve("requests/api/b/get-api-b.bru")))
     }
 
     @Test
@@ -482,7 +483,7 @@ class BrunoWriterCollectionTest {
         val brunoRoot = writer.writeCollection(projectRoot, listOf(endpointA, endpointB), settings)
         writer.writeCollection(projectRoot, listOf(endpointA), settings)
 
-        assertTrue(Files.exists(brunoRoot.resolve("requests/api/get-api-b.bru")))
+        assertTrue(Files.exists(brunoRoot.resolve("requests/api/b/get-api-b.bru")))
     }
 
     @Test
@@ -498,9 +499,66 @@ class BrunoWriterCollectionTest {
         val endpointC = Endpoint(httpMethod = "GET", path = "/api/c", handlerName = "c", hasRequestBody = false)
         val diff = writer.computeDiff(projectRoot, listOf(endpointA, endpointC), settings)
 
-        assertEquals(setOf("requests/api/get-api-c.bru"), diff.added.toSet())
+        assertEquals(setOf("requests/api/c/get-api-c.bru"), diff.added.toSet())
         assertTrue(diff.removed.isEmpty())
-        assertTrue(diff.unchanged.contains("requests/api/get-api-a.bru"))
-        assertTrue(diff.unchanged.contains("requests/api/get-api-b.bru"))
+        assertTrue(diff.unchanged.contains("requests/api/a/get-api-a.bru"))
+        assertTrue(diff.unchanged.contains("requests/api/b/get-api-b.bru"))
+    }
+
+    @Test
+    fun `by url path nests folders mirroring the endpoint path`() {
+        val projectRoot = Files.createTempDirectory("bruno-strategy-byurl")
+        val settings = BrunoGeneratorState().apply { folderStrategy = FolderStrategy.BY_URL_PATH }
+        val get = Endpoint(httpMethod = "GET", path = "/api/widgets", handlerName = "list", hasRequestBody = false)
+        val post = Endpoint(httpMethod = "POST", path = "/api/widgets", handlerName = "create", hasRequestBody = false)
+        val byId = Endpoint(httpMethod = "GET", path = "/api/widgets/{id}", handlerName = "byId", hasRequestBody = false)
+
+        val brunoRoot = writer.writeCollection(projectRoot, listOf(get, post, byId), settings, folderStrategy = FolderStrategy.BY_URL_PATH)
+
+        assertTrue(Files.exists(brunoRoot.resolve("requests/api/widgets/get-api-widgets.bru")))
+        assertTrue(Files.exists(brunoRoot.resolve("requests/api/widgets/post-api-widgets.bru")))
+        assertTrue(Files.exists(brunoRoot.resolve("requests/api/widgets/id/get-api-widgets-id.bru")))
+    }
+
+    @Test
+    fun `by controller groups endpoints under a folder named after the controller`() {
+        val projectRoot = Files.createTempDirectory("bruno-strategy-bycontroller")
+        val settings = BrunoGeneratorState().apply { folderStrategy = FolderStrategy.BY_CONTROLLER }
+        val list = Endpoint(httpMethod = "GET", path = "/api/widgets", handlerName = "list", hasRequestBody = false, controllerName = "WidgetController")
+        val create = Endpoint(httpMethod = "POST", path = "/api/widgets", handlerName = "create", hasRequestBody = false, controllerName = "WidgetController")
+
+        val brunoRoot = writer.writeCollection(projectRoot, listOf(list, create), settings, folderStrategy = FolderStrategy.BY_CONTROLLER)
+
+        assertTrue(Files.exists(brunoRoot.resolve("requests/widget-controller/get-api-widgets.bru")))
+        assertTrue(Files.exists(brunoRoot.resolve("requests/widget-controller/post-api-widgets.bru")))
+    }
+
+    @Test
+    fun `flat places every request directly under requests`() {
+        val projectRoot = Files.createTempDirectory("bruno-strategy-flat")
+        val settings = BrunoGeneratorState().apply { folderStrategy = FolderStrategy.FLAT }
+        val a = Endpoint(httpMethod = "GET", path = "/api/a", handlerName = "a", hasRequestBody = false)
+        val nested = Endpoint(httpMethod = "GET", path = "/api/widgets/{id}", handlerName = "byId", hasRequestBody = false)
+
+        val brunoRoot = writer.writeCollection(projectRoot, listOf(a, nested), settings, folderStrategy = FolderStrategy.FLAT)
+
+        assertTrue(Files.exists(brunoRoot.resolve("requests/get-api-a.bru")))
+        assertTrue(Files.exists(brunoRoot.resolve("requests/get-api-widgets-id.bru")))
+    }
+
+    @Test
+    fun `request path is stable per strategy across full and subset selections`() {
+        val settings = BrunoGeneratorState().apply { folderStrategy = FolderStrategy.BY_CONTROLLER }
+        val a = Endpoint(httpMethod = "GET", path = "/api/a", handlerName = "a", hasRequestBody = false, controllerName = "WidgetController")
+        val b = Endpoint(httpMethod = "GET", path = "/api/b", handlerName = "b", hasRequestBody = false, controllerName = "WidgetController")
+
+        val fullRoot = Files.createTempDirectory("bruno-strategy-stable-full")
+        val fullBruno = writer.writeCollection(fullRoot, listOf(a, b), settings, folderStrategy = FolderStrategy.BY_CONTROLLER)
+
+        val subsetRoot = Files.createTempDirectory("bruno-strategy-stable-subset")
+        val subsetBruno = writer.writeCollection(subsetRoot, listOf(b), settings, folderStrategy = FolderStrategy.BY_CONTROLLER)
+
+        assertTrue(Files.exists(fullBruno.resolve("requests/widget-controller/get-api-b.bru")))
+        assertTrue(Files.exists(subsetBruno.resolve("requests/widget-controller/get-api-b.bru")))
     }
 }
