@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.codeteam"
-version = "1.5.0"
+version = "1.5.1"
 
 // Build with the JDK installed on this machine (currently JDK 25), but keep the compiled
 // bytecode at Java 21: IntelliJ Platform 2025.3.1's bundled JetBrains Runtime is JDK 21,
@@ -68,6 +68,10 @@ intellijPlatform {
         }
 
         changeNotes = """
+            <p><b>1.5.1:</b></p>
+            <ul>
+                <li>Fix JetBrains Plugin Verifier findings for IntelliJ IDEA 2026.3: replace a deprecated list renderer, an override-only navigation call and an experimental segmented-button listener with supported APIs</li>
+            </ul>
             <p><b>1.4.0:</b></p>
             <ul>
                 <li>Configurable folder strategy for generated requests: "By URL path" (default) nests folders mirroring the endpoint path, "By controller" groups one folder per controller class, and "Flat" puts every request directly under requests/</li>
@@ -118,6 +122,13 @@ intellijPlatform {
             </ul>
         """.trimIndent()
     }
+
+    pluginVerification {
+        ides {
+            create(org.jetbrains.intellij.platform.gradle.IntelliJPlatformType.IntellijIdea, providers.gradleProperty("platformVersion"))
+            create(org.jetbrains.intellij.platform.gradle.IntelliJPlatformType.IntellijIdea, "263.7031.23")
+        }
+    }
 }
 
 tasks {
@@ -125,11 +136,14 @@ tasks {
         gradleVersion = providers.gradleProperty("gradleVersion").get()
     }
 
-    register<Copy>("copyPluginToRoot") {
-        from("build/distributions")
-        include("*.zip")
-        into(rootDir)
+    // Copies the zip by hand instead of using a Copy task: a Copy into rootDir would declare
+    // the whole project as its output and clash with every other task (test, verifyPlugin).
+    register("copyPluginToRoot") {
+        val archive = buildPlugin.flatMap { it.archiveFile }
+        val root = rootDir
         doLast {
+            val zip = archive.get().asFile
+            zip.copyTo(root.resolve(zip.name), overwrite = true)
             println("✓ Plugin copied to project root")
         }
     }

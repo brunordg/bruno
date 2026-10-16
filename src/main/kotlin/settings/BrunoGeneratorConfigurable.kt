@@ -12,8 +12,8 @@ import com.codeteam.ui.description
 import com.codeteam.ui.label
 import com.codeteam.writer.composeCollectionName
 import com.intellij.ui.DocumentAdapter
-import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.components.JBLabel
+import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.intellij.ui.components.JBRadioButton
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.Align
@@ -75,7 +75,7 @@ class BrunoGeneratorConfigurable(private val project: Project) : Configurable {
             .forEach { it.document.addDocumentListener(previewListener) }
 
         val newAuthModeCombo = ComboBox(AuthMode.entries.toTypedArray())
-        newAuthModeCombo.renderer = SimpleListCellRenderer.create("") { it.label }
+        newAuthModeCombo.renderer = textListCellRenderer { it?.label }
         authModeCombo = newAuthModeCombo
 
         val panel = panel {
