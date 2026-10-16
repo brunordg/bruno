@@ -93,6 +93,8 @@ class ControllerScannerTest : BasePlatformTestCase() {
         // Each scanned endpoint carries its declaring controller's simple name,
         // which the writer uses for the by-controller folder strategy.
         assertTrue(endpoints.all { it.controllerName == "WidgetController" })
+        // The qualified name lets the selection dialog navigate to the handler.
+        assertTrue(endpoints.all { it.controllerQualifiedName == "WidgetController" })
 
         val getEndpoint = endpoints.first { it.httpMethod == "GET" }
         assertEquals("/api/widgets/{id}", getEndpoint.path)

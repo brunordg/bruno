@@ -115,9 +115,7 @@ class BrunoWriter {
         val baseName = settings.collectionName.ifBlank {
             projectRoot.fileName?.toString().orEmpty().ifBlank { "collection" }
         }
-        val prefix = settings.collectionNamePrefix.trim()
-        val suffix = settings.collectionNameSuffix.trim()
-        return "$prefix$baseName$suffix"
+        return composeCollectionName(baseName, settings.collectionNamePrefix, settings.collectionNameSuffix)
     }
 
     private fun brunoJson(collectionName: String): String {
@@ -520,3 +518,6 @@ class BrunoWriter {
         }
     }
 }
+
+internal fun composeCollectionName(baseName: String, prefix: String, suffix: String): String =
+    "${prefix.trim()}$baseName${suffix.trim()}"

@@ -2,15 +2,21 @@ package com.codeteam
 
 import com.codeteam.model.Endpoint
 import com.codeteam.scanner.ControllerScanner
+import com.codeteam.settings.BrunoGeneratorConfigurable
 import com.codeteam.settings.BrunoGeneratorSettings
 import com.codeteam.settings.BrunoGeneratorState
 import com.codeteam.ui.EndpointSelectionDialog
 import com.codeteam.writer.BrunoWriter
+import com.codeteam.writer.CollectionDiff
+import com.intellij.ide.actions.RevealFileAction
+import com.intellij.notification.Notification
+import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.DumbAware
@@ -74,10 +80,8 @@ class GenerateBrunoCollectionAction : AnAction(), DumbAware {
         if (!dialog.showAndGet()) return
         val selected = dialog.selectedEndpoints()
         val folderStrategy = dialog.selectedFolderStrategy()
-        if (selected.isEmpty()) {
-            notify(project, "Nothing selected", "No endpoints were selected; generation cancelled.", NotificationType.INFORMATION)
-            return
-        }
+        // Counted before writing so the notification can report what changed on disk.
+        val diff = writer.computeDiff(projectRoot, selected, settings, outputRoot, folderStrategy)
 
         object : Task.Backgroundable(project, "Generating Bruno collection", false) {
             private lateinit var brunoRoot: Path
@@ -90,18 +94,30 @@ class GenerateBrunoCollectionAction : AnAction(), DumbAware {
             }
 
             override fun onSuccess() {
-                notify(
-                    project,
-                    "Bruno collection generated",
-                    "Generated ${selected.size} requests in ${brunoRoot.fileName}/",
-                    NotificationType.INFORMATION
-                )
+                successNotification(project, selected.size, brunoRoot, diff).notify(project)
             }
 
             override fun onThrowable(error: Throwable) {
                 notify(project, "Failed to generate Bruno collection", error.message ?: "Unknown error", NotificationType.ERROR)
             }
         }.queue()
+    }
+
+    internal fun successNotification(project: Project, requestCount: Int, brunoRoot: Path, diff: CollectionDiff): Notification {
+        val requests = if (requestCount == 1) "1 request" else "$requestCount requests"
+        return NotificationGroupManager.getInstance()
+            .getNotificationGroup("Bruno Generator")
+            .createNotification(
+                "Bruno collection generated",
+                "$requests in ${brunoRoot.fileName}/ (+${diff.added.size}, -${diff.removed.size})",
+                NotificationType.INFORMATION
+            )
+            .addAction(NotificationAction.createSimple("Open folder") {
+                RevealFileAction.openDirectory(brunoRoot)
+            })
+            .addAction(NotificationAction.createSimple("Settings") {
+                ShowSettingsUtil.getInstance().showSettingsDialog(project, BrunoGeneratorConfigurable::class.java)
+            })
     }
 
     private fun notify(project: Project, title: String, content: String, type: NotificationType) {
