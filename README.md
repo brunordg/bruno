@@ -22,8 +22,14 @@ The plugin scans Spring MVC endpoints, detects HTTP methods, paths, and request 
 ## How to use
 
 1. Open your Spring Boot project in IntelliJ IDEA.
-2. (Optional) Go to **Settings > Tools > Bruno Generator** to add/edit environments, pick the default one, and set a custom output directory. Leave the output directory empty to generate the collection in the project root.
-3. Run **Tools > Generate Bruno Collection**.
+2. (Optional) Go to **Settings > Tools > Bruno Generator**. The page is grouped into **Environments** (table plus a default-environment picker that follows your table edits), **Output** (directory with a folder browser, collection name with prefix/suffix and a live preview of the final folder name) and **Generation** (regeneration mode and default folder strategy as radio buttons, plus authentication). Leave the output directory empty to generate the collection in the project root.
+3. Run **Tools > Generate Bruno Collection**. In the dialog:
+   - Endpoints are grouped by controller, with a selected/total counter per group, the HTTP method highlighted by color and the handler name in gray.
+   - Type in the search field to filter by method, path, handler or controller. Hidden endpoints keep their selection. Use **Select all** / **Clear** for bulk changes.
+   - Pick the folder strategy with the segmented buttons. The preview on the right shows a `+added -removed =unchanged` summary and a folder tree of the files that will be created or removed.
+   - Double-click an endpoint to jump to its handler method in the editor.
+   - The footer shows the active regeneration mode. The confirm button reads **Generate N requests** and is disabled when nothing is selected.
+   - After generating, the notification reports the counts and offers **Open folder** and **Settings** actions.
 4. Open the generated collection folder (named after your project) in Bruno.
 5. Switch environments in Bruno, or edit the `baseUrl` variable directly, to point requests at your local or remote API.
 
@@ -85,8 +91,14 @@ O plugin analisa endpoints Spring MVC, identifica métodos HTTP, rotas e parâme
 ## Como usar
 
 1. Abra o seu projeto Spring Boot no IntelliJ IDEA.
-2. (Opcional) Vá em **Settings > Tools > Bruno Generator** para adicionar/editar ambientes, escolher o ambiente padrão e definir um diretório de saída customizado. Deixe o diretório de saída vazio para gerar a collection na raiz do projeto.
-3. Execute **Tools > Generate Bruno Collection**.
+2. (Opcional) Vá em **Settings > Tools > Bruno Generator**. A página é organizada em **Environments** (tabela e seletor do ambiente padrão, que acompanha as edições da tabela), **Output** (diretório com seletor de pasta, nome da collection com prefixo/sufixo e prévia ao vivo do nome final da pasta) e **Generation** (modo de regeneração e folder strategy padrão em radio buttons, além da autenticação). Deixe o diretório de saída vazio para gerar a collection na raiz do projeto.
+3. Execute **Tools > Generate Bruno Collection**. No diálogo:
+   - Os endpoints aparecem agrupados por controller, com contador de selecionados/total por grupo, o método HTTP destacado por cor e o nome do handler em cinza.
+   - Digite no campo de busca para filtrar por método, rota, handler ou controller. Endpoints ocultos mantêm a seleção. Use **Select all** / **Clear** para mudanças em lote.
+   - Escolha a folder strategy nos botões segmentados. O preview à direita mostra o resumo `+adicionados -removidos =inalterados` e uma árvore de pastas com os arquivos que serão criados ou removidos.
+   - Dê duplo clique num endpoint para abrir o método handler no editor.
+   - O rodapé mostra o modo de regeneração ativo. O botão de confirmação mostra **Generate N requests** e fica desabilitado quando nada está selecionado.
+   - Após gerar, a notificação informa as contagens e oferece as ações **Open folder** e **Settings**.
 4. Abra a pasta da collection gerada (com o nome do seu projeto) no Bruno.
 5. Troque de ambiente no Bruno, ou edite a variável `baseUrl` diretamente, para apontar os requests para a API local ou remota.
 

@@ -1,6 +1,7 @@
 package writer
 
 import com.codeteam.writer.BrunoWriter
+import com.codeteam.writer.composeCollectionName
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -56,5 +57,11 @@ class BrunoWriterTest {
     @Test
     fun `fakeValue falls back to a variable reference for unrecognized boolean fields`() {
         assertEquals("{{flag}}", writer.fakeValue("flag", "boolean"))
+    }
+
+    @Test
+    fun `collection name composes trimmed prefix, base name and suffix`() {
+        assertEquals("my-shop-api-dev", composeCollectionName("shop-api", " my- ", "-dev "))
+        assertEquals("shop-api", composeCollectionName("shop-api", "", ""))
     }
 }

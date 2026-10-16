@@ -50,6 +50,7 @@ class ControllerScanner {
                 handlerName = method.name,
                 hasRequestBody = hasRequestBody,
                 controllerName = psiClass.name.orEmpty(),
+                controllerQualifiedName = psiClass.qualifiedName.orEmpty(),
                 summary = operation?.attributeText("summary"),
                 description = operation?.attributeText("description"),
                 bodyKind = bodyKind,

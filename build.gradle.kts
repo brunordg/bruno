@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.codeteam"
-version = "1.4.0"
+version = "1.5.0"
 
 // Build with the JDK installed on this machine (currently JDK 25), but keep the compiled
 // bytecode at Java 21: IntelliJ Platform 2025.3.1's bundled JetBrains Runtime is JDK 21,
