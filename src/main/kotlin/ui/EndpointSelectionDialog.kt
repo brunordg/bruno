@@ -6,6 +6,7 @@ import com.codeteam.settings.FolderStrategy
 import com.codeteam.writer.BrunoWriter
 import com.codeteam.writer.CollectionDiff
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.observable.properties.AtomicProperty
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.psi.JavaPsiFacade
@@ -25,10 +26,10 @@ import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.dsl.builder.AlignX
-import com.intellij.ui.dsl.builder.SegmentedButton
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.treeStructure.Tree
 import com.intellij.ui.scale.JBUIScale
+import com.intellij.util.PsiNavigateUtil
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.tree.TreeUtil
 import java.awt.BorderLayout
@@ -66,8 +67,8 @@ class EndpointSelectionDialog(
     private val diffSummaryLabel = JBLabel()
     private val diffRoot = DefaultMutableTreeNode()
     private val diffTree = Tree(DefaultTreeModel(diffRoot))
-    private lateinit var folderStrategyButton: SegmentedButton<FolderStrategy>
-    private var selectedStrategy: FolderStrategy = settings.folderStrategy
+    private val strategyProperty = AtomicProperty(settings.folderStrategy)
+    private val selectedStrategy: FolderStrategy get() = strategyProperty.get()
     private var rebuilding = false
 
     init {
@@ -111,12 +112,8 @@ class EndpointSelectionDialog(
             cell(ActionLink("Clear") { setAll(false) })
         }
         row("Folder strategy:") {
-            folderStrategyButton = segmentedButton(FolderStrategy.entries) { text = it.label }
-            folderStrategyButton.selectedItem = selectedStrategy
-            folderStrategyButton.whenItemSelected(disposable) {
-                selectedStrategy = it
-                refresh()
-            }
+            segmentedButton(FolderStrategy.entries) { text = it.label }.bind(strategyProperty)
+            strategyProperty.afterChange(disposable) { refresh() }
         }
     }
 
@@ -157,7 +154,7 @@ class EndpointSelectionDialog(
     internal fun isConfirmEnabled(): Boolean = isOKActionEnabled
 
     internal fun selectStrategy(strategy: FolderStrategy) {
-        folderStrategyButton.selectedItem = strategy
+        strategyProperty.set(strategy)
     }
 
     internal fun diffSummaryText(): String = diffSummaryLabel.text
@@ -255,7 +252,7 @@ class EndpointSelectionDialog(
             ?: return false
         val method = psiClass.findMethodsByName(endpoint.handlerName, false).firstOrNull() ?: return false
         if (!method.canNavigate()) return false
-        method.navigate(true)
+        PsiNavigateUtil.navigate(method)
         return true
     }
 
