@@ -134,6 +134,58 @@ class ControllerScannerTest : BasePlatformTestCase() {
         assertEquals(listOf("ACTIVE", "INACTIVE"), statusField.enumConstants)
     }
 
+    fun `test extracts past, future and positive constraints from body fields`() {
+        myFixture.addFileToProject(
+            "EventController.java",
+            """
+            import org.springframework.web.bind.annotation.*;
+
+            @RestController
+            public class EventController {
+                @PostMapping("/events")
+                public Object create(@RequestBody CreateEventRequest request) {
+                    return null;
+                }
+            }
+            """.trimIndent()
+        )
+        myFixture.addFileToProject(
+            "CreateEventRequest.java",
+            """
+            import jakarta.validation.constraints.*;
+            import java.time.LocalDate;
+
+            public class CreateEventRequest {
+                @Past
+                public LocalDate birthDate;
+                @PastOrPresent
+                public LocalDate signedOn;
+                @Future
+                public LocalDate startsOn;
+                @FutureOrPresent
+                public LocalDate endsOn;
+                @Positive
+                public int seats;
+                public LocalDate plain;
+            }
+            """.trimIndent()
+        )
+
+        val fields = ControllerScanner().scan(project).single().requestBodyFields.associateBy { it.name }
+
+        assertTrue(fields.getValue("birthDate").constraints.past)
+        assertTrue(fields.getValue("signedOn").constraints.past)
+        assertTrue(fields.getValue("startsOn").constraints.future)
+        assertTrue(fields.getValue("endsOn").constraints.future)
+        assertTrue(fields.getValue("seats").constraints.positive)
+        assertEquals("LocalDate", fields.getValue("plain").type)
+        with(fields.getValue("plain").constraints) {
+            assertFalse(past)
+            assertFalse(future)
+            assertFalse(positive)
+        }
+    }
+
     fun `test extracts nested object fields and lists of objects and scalars from a request body`() {
         myFixture.addFileToProject(
             "OrderController.java",

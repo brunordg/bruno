@@ -251,7 +251,10 @@ class ControllerScanner {
             min = min,
             max = max,
             email = email,
-            pattern = pattern
+            pattern = pattern,
+            past = hasAnyAnnotation(PAST_ANNOTATIONS),
+            future = hasAnyAnnotation(FUTURE_ANNOTATIONS),
+            positive = hasAnyAnnotation(POSITIVE_ANNOTATIONS)
         )
     }
 
@@ -363,6 +366,22 @@ class ControllerScanner {
         private val MAX_ANNOTATIONS = listOf(
             "jakarta.validation.constraints.Max",
             "javax.validation.constraints.Max"
+        )
+        private val PAST_ANNOTATIONS = listOf(
+            "jakarta.validation.constraints.Past",
+            "jakarta.validation.constraints.PastOrPresent",
+            "javax.validation.constraints.Past",
+            "javax.validation.constraints.PastOrPresent"
+        )
+        private val FUTURE_ANNOTATIONS = listOf(
+            "jakarta.validation.constraints.Future",
+            "jakarta.validation.constraints.FutureOrPresent",
+            "javax.validation.constraints.Future",
+            "javax.validation.constraints.FutureOrPresent"
+        )
+        private val POSITIVE_ANNOTATIONS = listOf(
+            "jakarta.validation.constraints.Positive",
+            "javax.validation.constraints.Positive"
         )
         private val EMAIL_ANNOTATIONS = listOf(
             "jakarta.validation.constraints.Email",

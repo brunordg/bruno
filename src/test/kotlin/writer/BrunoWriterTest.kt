@@ -51,12 +51,22 @@ class BrunoWriterTest {
 
     @Test
     fun `fakeValue for a plain string field uses randomLoremWord`() {
-        assertEquals("{{\$randomLoremWord}}", writer.fakeValue("notes", "String"))
+        assertEquals("{{\$randomLoremWord}}", writer.fakeValue("misc", "String"))
     }
 
     @Test
-    fun `fakeValue falls back to a variable reference for unrecognized boolean fields`() {
-        assertEquals("{{flag}}", writer.fakeValue("flag", "boolean"))
+    fun `fakeValue for a notes field uses randomLoremSentence`() {
+        assertEquals("{{\$randomLoremSentence}}", writer.fakeValue("notes", "String"))
+    }
+
+    @Test
+    fun `fakeValue for an unrecognized boolean field uses randomBoolean`() {
+        assertEquals("{{\$randomBoolean}}", writer.fakeValue("flag", "boolean"))
+    }
+
+    @Test
+    fun `fakeValue falls back to a variable reference for unrecognized types`() {
+        assertEquals("{{payload}}", writer.fakeValue("payload", "Duration"))
     }
 
     @Test

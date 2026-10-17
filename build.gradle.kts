@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.codeteam"
-version = "1.5.1"
+version = "1.6.0"
 
 // Build with the JDK installed on this machine (currently JDK 25), but keep the compiled
 // bytecode at Java 21: IntelliJ Platform 2025.3.1's bundled JetBrains Runtime is JDK 21,
@@ -68,6 +68,15 @@ intellijPlatform {
         }
 
         changeNotes = """
+            <p><b>1.6.0:</b></p>
+            <ul>
+                <li>Smarter sample values: field names are matched by whole words in English or Portuguese (no more false matches such as "paid" as an id or "timeout" as a date), with many more Bruno dynamic variables (full name, username, password, company, job title, URL, avatar, IP, coordinates, currency, color, file name, locale, version...)</li>
+                <li>boolean and UUID fields are filled by type (random boolean and random UUID) instead of an undefined variable</li>
+                <li>java.time dates in the format Spring expects: collection.bru now has a pre-request script setting randomDate, randomPastDate, randomFutureDate, randomDateTime and randomTime, used by LocalDate/LocalDateTime/LocalTime fields; @Past/@Future and words such as "birth" or "due" pick past or future dates</li>
+                <li>Start/end period fields (start, begin, from, inicio / end, finish, until, fim, termino) share one random day: the start gets 00:00:00 and the end 23:59:59, for LocalDate, LocalDateTime, LocalTime and Instant/OffsetDateTime/ZonedDateTime</li>
+                <li>Pagination params get page=0 and size=20; @Positive avoids zero; description fields use a sentence</li>
+                <li>Regenerating an existing collection in Overwrite mode changes previously generated sample values</li>
+            </ul>
             <p><b>1.5.1:</b></p>
             <ul>
                 <li>Fix JetBrains Plugin Verifier findings for IntelliJ IDEA 2026.3: replace a deprecated list renderer, an override-only navigation call and an experimental segmented-button listener with supported APIs</li>

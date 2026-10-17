@@ -135,7 +135,8 @@ class BrunoWriter {
             }
         """.trimIndent() + "\n"
         val auth = authBlock(settings.authMode)
-        return if (auth.isEmpty()) vars else vars + "\n" + auth
+        val withAuth = if (auth.isEmpty()) vars else vars + "\n" + auth
+        return withAuth + "\n" + ExampleValues.DATE_SCRIPT
     }
 
     private fun authBlock(mode: AuthMode): String = when (mode) {
@@ -392,7 +393,7 @@ class BrunoWriter {
             val literal = boundedNumericLiteral(constraints.min, constraints.max)
             return if (isDoubleTypeName(type)) "$literal.0" else literal.toString()
         }
-        return fakeValue(field.name, field.type)
+        return ExampleValues.valueFor(field.name, field.type, constraints)
     }
 
     private fun boundedNumericLiteral(min: Long?, max: Long?): Long = when {
@@ -412,44 +413,7 @@ class BrunoWriter {
         it.contains("bigdecimal") || it.contains("double") || it.contains("float")
     }
 
-    internal fun fakeValue(name: String, type: String): String {
-        val normalized = name.lowercase()
-        val lowerType = type.lowercase()
-        val isStringType = lowerType.contains("string")
-        val isDate = lowerType.contains("date") ||
-            lowerType.contains("time") ||
-            lowerType.contains("timestamp") ||
-            lowerType.contains("localdatetime") ||
-            lowerType.contains("offsetdatetime")
-        val isNumericType = isNumericTypeName(lowerType)
-        val isDouble = isDoubleTypeName(lowerType)
-
-        return when {
-            normalized == "id" || normalized.endsWith("id") -> {
-                when {
-                    isNumericType -> "{{\$randomInt}}"
-                    isStringType -> "{{\$randomUUID}}"
-                    else -> "{{\$randomUUID}}"
-                }
-            }
-            "email" in normalized -> "{{\$randomEmail}}"
-            "first" in normalized && "name" in normalized -> "{{\$randomFirstName}}"
-            "last" in normalized && "name" in normalized -> "{{\$randomLastName}}"
-            "phone" in normalized || "mobile" in normalized || "cel" in normalized || "celular" in normalized || "telefone" in normalized -> "{{\$randomPhoneNumber}}"
-            "zip" in normalized || "postal" in normalized || "cep" in normalized -> "{{\$randomInt}}"
-            "date" in normalized || "time" in normalized || "createdAt" in normalized || "updatedAt" in normalized -> "{{\$isoTimestamp}}"
-            "amount" in normalized || "price" in normalized || "total" in normalized -> "{{\$randomInt}}"
-            "street" in normalized || "rua" in normalized -> "{{\$randomStreetAddress}}"
-            "city" in normalized || "cidade" in normalized -> "{{\$randomCity}}"
-            "country" in normalized || "pais" in normalized -> "{{\$randomCountry}}"
-            "description" in normalized || "descricao" in normalized -> "{{\$randomProduct}}"
-            isDouble -> "{{\$randomPrice}}"
-            isDate -> "{{\$isoTimestamp}}"
-            isStringType -> "{{\$randomLoremWord}}"
-            isNumericType -> "{{\$randomInt}}"
-            else -> "{{$name}}"
-        }
-    }
+    internal fun fakeValue(name: String, type: String): String = ExampleValues.valueFor(name, type)
 
     internal fun slug(raw: String): String {
         return raw
