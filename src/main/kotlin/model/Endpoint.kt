@@ -18,7 +18,10 @@ data class ValidationConstraints(
     val min: Long? = null,
     val max: Long? = null,
     val email: Boolean = false,
-    val pattern: String? = null
+    val pattern: String? = null,
+    val past: Boolean = false,
+    val future: Boolean = false,
+    val positive: Boolean = false
 )
 
 data class RequestBodyField(

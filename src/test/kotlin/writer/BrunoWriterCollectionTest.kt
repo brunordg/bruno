@@ -561,4 +561,61 @@ class BrunoWriterCollectionTest {
         assertTrue(Files.exists(fullBruno.resolve("requests/widget-controller/get-api-b.bru")))
         assertTrue(Files.exists(subsetBruno.resolve("requests/widget-controller/get-api-b.bru")))
     }
+
+    @Test
+    fun `collection bru always carries the date script, even without date fields`() {
+        val projectRoot = Files.createTempDirectory("bruno-writer-script-test")
+        val endpoint = Endpoint(httpMethod = "GET", path = "/ping", handlerName = "ping", hasRequestBody = false)
+
+        val brunoRoot = writer.writeCollection(projectRoot, listOf(endpoint), BrunoGeneratorState())
+
+        val collectionText = Files.readString(brunoRoot.resolve("collection.bru"))
+        assertTrue(collectionText.contains("script:pre-request {"))
+        for (name in listOf("randomDate", "randomPastDate", "randomFutureDate", "randomDateTime", "randomTime")) {
+            assertTrue(name, collectionText.contains("bru.setVar(\"$name\""))
+        }
+    }
+
+    @Test
+    fun `body and query values follow names, types and constraints`() {
+        val projectRoot = Files.createTempDirectory("bruno-writer-values-test")
+        val endpoint = Endpoint(
+            httpMethod = "POST",
+            path = "/api/people",
+            handlerName = "createPerson",
+            hasRequestBody = true,
+            bodyKind = BodyKind.JSON,
+            requestBodyFields = listOf(
+                RequestBodyField(name = "ativo", type = "boolean"),
+                RequestBodyField(name = "token", type = "UUID"),
+                RequestBodyField(name = "dataNascimento", type = "LocalDate"),
+                RequestBodyField(name = "startsOn", type = "LocalDate", constraints = ValidationConstraints(future = true)),
+                RequestBodyField(name = "cidade", type = "String"),
+                RequestBodyField(name = "descricao", type = "String"),
+                RequestBodyField(name = "quantidade", type = "int", constraints = ValidationConstraints(positive = true)),
+                RequestBodyField(name = "city", type = "String", example = "Lisboa"),
+                RequestBodyField(name = "startDateTime", type = "LocalDateTime"),
+                RequestBodyField(name = "endDateTime", type = "LocalDateTime")
+            ),
+            queryParams = listOf(
+                RequestParameter(name = "page", kind = ParamKind.QUERY, type = "int", required = true),
+                RequestParameter(name = "size", kind = ParamKind.QUERY, type = "int", required = true)
+            )
+        )
+
+        val brunoRoot = writer.writeCollection(projectRoot, listOf(endpoint), BrunoGeneratorState())
+        val requestText = Files.readString(brunoRoot.resolve("requests/api/people/post-api-people.bru"))
+
+        assertTrue(requestText.contains("\"ativo\": {{\$randomBoolean}}"))
+        assertTrue(requestText.contains("\"token\": \"{{\$randomUUID}}\""))
+        assertTrue(requestText.contains("\"dataNascimento\": \"{{randomPastDate}}\""))
+        assertTrue(requestText.contains("\"startsOn\": \"{{randomFutureDate}}\""))
+        assertTrue(requestText.contains("\"cidade\": \"{{\$randomCity}}\""))
+        assertTrue(requestText.contains("\"descricao\": \"{{\$randomLoremSentence}}\""))
+        assertTrue(requestText.contains("\"quantidade\": 1"))
+        assertTrue(requestText.contains("\"city\": \"Lisboa\""))
+        assertTrue(requestText.contains("?page=0&size=20"))
+        assertTrue(requestText.contains("\"startDateTime\": \"{{randomStartDateTime}}\""))
+        assertTrue(requestText.contains("\"endDateTime\": \"{{randomEndDateTime}}\""))
+    }
 }

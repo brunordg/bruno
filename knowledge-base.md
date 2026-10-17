@@ -231,7 +231,7 @@ Fonte: `src/main/kotlin/model/Endpoint.kt:23-31`.
 
 Descrição: restrições de Bean Validation lidas por reflexão de anotações (Jakarta ou `javax`).
 
-Campos: `required`, `minSize`, `maxSize`, `min`, `max`, `email`, `pattern`.
+Campos: `required`, `minSize`, `maxSize`, `min`, `max`, `email`, `pattern`, `past` (`@Past`/`@PastOrPresent`), `future` (`@Future`/`@FutureOrPresent`), `positive` (`@Positive`).
 
 Fonte: `src/main/kotlin/model/Endpoint.kt:13-21`.
 
@@ -391,11 +391,16 @@ Fonte: `src/main/kotlin/scanner/ControllerScanner.kt:194-215` (`extractConstrain
 
 ### REGRA: Geração de valores de exemplo ("fakes") — heurística por nome e tipo
 
-Descrição: ao gerar o corpo JSON de exemplo, o valor de cada campo é escolhido por uma cascata de heurísticas sobre o **nome** (case-insensitive, com termos em inglês e português) e o **tipo** do campo.
+Descrição: o valor de cada campo de body, parâmetro, cookie e parte multipart é escolhido pelo **nome** (comparado por palavra inteira, em inglês e português), pelo **tipo** Java e pelas **restrições** de validação. Spec: `openspec/specs/example-value-generation`.
 
-Comportamento (ordem de prioridade, primeira que casar vence): nome termina em/é `id` → `{{$randomInt}}` (numérico) ou `{{$randomUUID}}` (string); contém `email` → `{{$randomEmail}}`; contém `first`+`name` → `{{$randomFirstName}}`; contém `last`+`name` → `{{$randomLastName}}`; contém `phone`/`mobile`/`cel`/`celular`/`telefone` → `{{$randomPhoneNumber}}`; contém `zip`/`postal`/`cep` → `{{$randomInt}}`; contém `date`/`time`/`createdAt`/`updatedAt` → `{{$isoTimestamp}}`; contém `amount`/`price`/`total` → `{{$randomInt}}`; contém `street`/`rua` → `{{$randomStreetAddress}}`; contém `city`/`cidade` → `{{$randomCity}}`; contém `country`/`pais` → `{{$randomCountry}}`; contém `description`/`descricao` → `{{$randomProduct}}`; senão, por tipo: `BigDecimal`/`double`/`float` → `{{$randomPrice}}`; tipo de data/hora → `{{$isoTimestamp}}`; `String` → `{{$randomLoremWord}}`; numérico → `{{$randomInt}}`; senão → `{{<nomeDoCampo>}}` (variável literal).
+Comportamento:
+1. O nome é tokenizado (camelCase incluindo siglas, `_`, `-`, dígitos, minúsculas, sem acentos): `userID` → `[user, id]`, `descrição` → `[descricao]`. Não há casamento por substring, então `paid`, `cancelReason`, `updatedBy` e `timeout` não viram id, telefone ou data.
+2. Ordem: paginação (`page`/`pagina` = `0`; `size`/`limit`/`pageSize`/`tamanho`/`limite` = `20`, só para tipos numéricos) → tipos de data (`LocalDate` → `{{randomDate}}`, ou `{{randomPastDate}}`/`{{randomFutureDate}}` por `@Past`/`@Future` ou por palavras como `nascimento`/`birth`/`vencimento`/`due`; `LocalDateTime` → `{{randomDateTime}}`; `LocalTime` → `{{randomTime}}`; `Instant`/`OffsetDateTime`/`ZonedDateTime`/`Date` → `{{$isoTimestamp}}`) → `id` como última palavra (`$randomInt` numérico, senão `$randomUUID`) → dicionário PT/EN (vence a regra com mais palavras; ex.: `countryCode` antes de `country`) → tipo (`boolean` → `$randomBoolean`, `UUID` → `$randomUUID`) → fallback (`String` → `$randomLoremWord`, decimal → `$randomPrice`, inteiro → `$randomInt`, senão `{{<nomeDoCampo>}}`).
+3. Períodos: em qualquer tipo de data, palavras de início (`start`, `starts`, `begin`, `begins`, `from`, `inicio`) ou fim (`end`, `ends`, `finish`, `until`, `fim`, `termino`) usam `{{randomStart<Tipo>}}`/`{{randomEnd<Tipo>}}` (`Date`, `DateTime`, `Time`, `Timestamp` com `Z`), derivados de um único dia sorteado por request (início `00:00:00`, fim `23:59:59`). `@Past`/`@Future` vencem essas palavras; elas vencem as palavras de passado/futuro.
+3a. Ajustes: `@Positive` sem `@Min` transforma `$randomInt` em `1`; `@Size(max <= 10)` transforma `$randomLoremSentence` em `$randomLoremWord`.
+4. As variáveis de data são definidas pelo `script:pre-request` que `collectionFileContent` sempre acrescenta ao `collection.bru` (`ExampleValues.DATE_SCRIPT`).
 
-Fonte: `src/main/kotlin/writer/BrunoWriter.kt:323-360` (`fakeValue`). Classe: `BrunoWriter`.
+Fonte: `src/main/kotlin/writer/ExampleValues.kt` (`tokenize`, `valueFor`, `DATE_SCRIPT`); `BrunoWriter.fakeValue` e `dynamicFakeForField` delegam para ele. Classe: `ExampleValues`.
 
 ### REGRA: Valores dinâmicos apenas em POST/PUT/PATCH
 
@@ -635,6 +640,7 @@ Fonte: `src/main/kotlin/GenerateBrunoCollectionAction.kt:38-93`; `src/main/resou
 |---|---|---|
 | `src/test/kotlin/scanner/ControllerScannerTest.kt` | `BasePlatformTestCase` (testes de PSI, com sandbox de IDE em memória) | Extração de path/query/header/cookie params e corpo validado (`@NotBlank`, `@Email`, `@Min`/`@Max`, enum); objetos aninhados e listas (objeto e escalar) no corpo; guarda de recursão contra DTO auto-referenciado; detecção de `@RequestPart`/`MultipartFile` e `BodyKind.MULTIPART` |
 | `src/test/kotlin/writer/BrunoWriterTest.kt` | JUnit 4 puro | Funções puras `internal`: `slug`, `toBrunoUrlPath`, `fakeValue` |
+| `src/test/kotlin/writer/ExampleValuesTest.kt` | JUnit 4 puro | Tokenização, dicionário PT/EN, tipos, datas, paginação e restrições de `ExampleValues` |
 | `src/test/kotlin/writer/BrunoWriterCollectionTest.kt` | JUnit 4 puro (usa diretórios temporários reais) | `writeCollection` fim-a-fim (bruno.json, environments, request com params/headers/body/docs); prune de arquivos obsoletos na regeneração; diretório de saída customizado; renderização JSON aninhada/array real (não placeholder); bloco `multipart-form`; `computeDiff` (added/removed/unchanged, sem efeitos colaterais em disco) |
 | `src/test/kotlin/settings/BrunoGeneratorStateTest.kt` | JUnit 4 puro | `resolvedDefaultBaseUrl` (ambiente padrão, fallback para o primeiro, fallback hardcoded); estado default (`dev`, `outputDirectory` vazio) |
 | `src/test/kotlin/ui/EndpointSelectionDialogGroupingTest.kt` | JUnit 4 puro | Função pura `groupEndpointsByTopPath` (agrupamento por primeiro segmento do path, fallback `"root"`) — sem interação com Swing |
@@ -846,7 +852,7 @@ Plugin IntelliJ IDEA (Kotlin) com fluxo linear: `AnAction` (entrada) → `Contro
 2. Verbo HTTP vem de `@GetMapping`/`@PostMapping`/.../`@RequestMapping(method=...)`; sem nenhuma dessas, o método não vira endpoint.
 3. Corpo de request é extraído recursivamente para objetos aninhados (limite de 5 níveis + guarda de ciclo) e coleções (`List`/array), com `Map` explicitamente fora de escopo.
 4. Multipart (`@RequestPart`/`MultipartFile`) gera `body:multipart-form` em vez de `body:json`.
-5. Valores de exemplo são escolhidos por heurística de nome+tipo do campo, com placeholders dinâmicos do Bruno apenas em POST/PUT/PATCH.
+5. Valores de exemplo são escolhidos por `ExampleValues` (palavras do nome em PT/EN, tipo e restrições), com placeholders dinâmicos do Bruno apenas nos bodies de POST/PUT/PATCH; datas `java.time` vêm do `script:pre-request` do `collection.bru`.
 6. Regenerar a collection **apaga** arquivos `.bru` que não correspondem mais ao estado atual (prune) — mitigado por um diálogo de diff antes da escrita.
 7. Todo request gerado tem `auth: none` fixo; nenhuma autenticação é configurada automaticamente.
 8. Seleção de endpoints feita pelo usuário no diálogo vale só para a execução atual, sem persistência.
