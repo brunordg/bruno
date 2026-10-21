@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "runs": [],
+  "verifications": [
+    {
+      "id": "mvd81us9-873c8b8f",
+      "at": "2026-10-18T02:44:06.298Z",
+      "command": "./gradlew test",
+      "exitCode": 0,
+      "passed": true,
+      "validateOk": true,
+      "validateIssues": [
+        "INFO: file: skip_specs is set in .openspec.yaml: change declares no spec-level behavior changes, zero deltas accepted"
+      ],
+      "durationMs": 12620,
+      "outputTail": "$ ./gradlew test\nStarting a Gradle Daemon, 3 incompatible Daemons could not be reused, use --status for details\nCalculating task graph as configuration cache cannot be reused because file 'build.gradle.kts' has changed.\n> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED\n> Task :initializeIntellijPlatformPlugin\n> Task :patchPluginXml UP-TO-DATE\n> Task :generateManifest UP-TO-DATE\n> Task :processTestResources UP-TO-DATE\n> Task :processResources UP-TO-DATE\n> Task :compileKotlin UP-TO-DATE\n> Task :compileJava NO-SOURCE\n> Task :classes UP-TO-DATE\n> Task :jar UP-TO-DATE\n> Task :instrumentCode UP-TO-DATE\n> Task :instrumentedJar UP-TO-DATE\n> Task :composedJar UP-TO-DATE\n> Task :prepareTestSandbox UP-TO-DATE\n> Task :prepareTest\n> Task :compileTestKotlin UP-TO-DATE\n> Task :compileTestJava NO-SOURCE\n> Task :testClasses UP-TO-DATE\n> Task :instrumentTestCode UP-TO-DATE\n> Task :test UP-TO-DATE\n\nBUILD SUCCESSFUL in 11s\n14 actionable tasks: 1 executed, 13 up-to-date\nConfiguration cache entry stored.\n\n$ openspec validate fix-plugin-verifier-findings\nválido\nINFO: file: skip_specs is set in .openspec.yaml: change declares no spec-level behavior changes, zero deltas accepted\n",
+      "logFile": ".specrunner/runs/verify-mvd81us9-873c8b8f.log"
+    }
+  ],
+  "review": {
+    "status": "approved",
+    "by": "Bruno",
+    "at": "2026-10-18T02:44:27.647Z",
+    "comment": null,
+    "fingerprint": "7d35a44b8e48e3cc18de932305ce21a1f3dc306c9ab473656c53abed773c1fc7",
+    "headCommit": "0c4618569866351bd0c57b19ef937a26dd047bce",
+    "withoutTests": false
+  },
+  "history": [
+    {
+      "at": "2026-10-18T02:44:18.919Z",
+      "actor": "system",
+      "event": "verification",
+      "detail": "Testes e validação OK"
+    },
+    {
+      "at": "2026-10-18T02:44:27.662Z",
+      "actor": "human",
+      "event": "approved",
+      "detail": "Aprovado por Bruno"
+    },
+    {
+      "at": "2026-10-18T02:44:37.095Z",
+      "actor": "human",
+      "event": "archived",
+      "detail": "Arquivado por Bruno"
+    }
+  ]
+}
