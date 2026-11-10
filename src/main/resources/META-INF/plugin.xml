@@ -16,6 +16,7 @@
     <resource-bundle>messages.MyMessageBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
+        <errorHandler implementation="com.intellij.diagnostic.JetBrainsMarketplaceErrorReportSubmitter"/>
         <notificationGroup id="Bruno Generator" displayType="BALLOON" isLogByDefault="true"/>
         <projectConfigurable
                 parentId="tools"

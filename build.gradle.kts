@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.codeteam"
-version = "1.6.0"
+version = "1.6.1"
 
 // Build with the JDK installed on this machine (currently JDK 25), but keep the compiled
 // bytecode at Java 21: IntelliJ Platform 2025.3.1's bundled JetBrains Runtime is JDK 21,
@@ -68,6 +68,10 @@ intellijPlatform {
         }
 
         changeNotes = """
+            <p><b>1.6.1:</b></p>
+            <ul>
+                <li>Uncaught exceptions and freezes from the plugin can now be reported to the developer through JetBrains Marketplace</li>
+            </ul>
             <p><b>1.6.0:</b></p>
             <ul>
                 <li>Smarter sample values: field names are matched by whole words in English or Portuguese (no more false matches such as "paid" as an id or "timeout" as a date), with many more Bruno dynamic variables (full name, username, password, company, job title, URL, avatar, IP, coordinates, currency, color, file name, locale, version...)</li>
