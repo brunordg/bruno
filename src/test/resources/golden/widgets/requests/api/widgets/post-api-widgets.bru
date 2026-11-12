@@ -1,0 +1,25 @@
+meta {
+  name: POST /api/widgets
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/widgets
+  body: json
+  auth: none
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "contactEmail": "{{$randomEmail}}",
+    "name": "{{$randomFullName}}",
+    "quantity": 5
+  }
+}
+
