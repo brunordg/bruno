@@ -4,3 +4,4 @@
 build
 # SpecRunner (logs locais de execução)
 .specrunner/runs/
+.claude/settings.local.json
