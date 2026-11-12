@@ -1,0 +1,24 @@
+meta {
+  name: GET /api/widgets/{id}
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/widgets/:id
+  auth: none
+}
+
+params:path {
+  id: {{$randomInt}}
+}
+
+params:query {
+  ~limit: 10
+}
+
+headers {
+  Accept: application/json
+  X-Trace-Id: {{$randomUUID}}
+}
+
